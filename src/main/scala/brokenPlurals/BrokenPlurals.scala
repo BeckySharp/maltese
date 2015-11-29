@@ -48,7 +48,7 @@ object BrokenPlurals {
     out.toArray
   }
 
-  def makeGangs (in:Array[LexicalItem], threshold:Int = 2):(Array[Gang], Lexicon[String], Counter[String]) = {
+  def makeGangs (in:Array[LexicalItem]):(Array[Gang], Lexicon[String], Counter[String]) = {
     val lexicon = new Lexicon[String]
     val counter = new Counter[String]
 
@@ -77,14 +77,42 @@ object BrokenPlurals {
 //    // Here, note that when we restrict to gangs which have at least 2 members, we have 605 data points and 58 gangs to match... this can be tuned
 
     // Iterate through the LIs and make the array of Gangs
+    // Initialize:
     val gangs = new Array[Gang](lexicon.size)
+    for (i <- 0 until gangs.length) gangs(i) = new Gang("")
+
+    // Make Gangs:
     for (i <- 0 until in.length) {
       val li = in(i)
       val g = li.gang
+      // If the first of this type, initialize
+      if (gangs(g).size() == 0) gangs(g).gangString = li.gangString
       gangs(g).add(li)
     }
 
     (gangs, lexicon, counter)
+  }
+
+  def filterGangs (in:Array[Gang], counter:Counter[String], threshold:Int = 2):(Array[Gang], Lexicon[String]) = {
+    val lexicon = new Lexicon[String]
+    val out = new ArrayBuffer[Gang]
+
+    for (g <- in) {
+      val count = counter.getOrElse(g.gangString, -1)
+      if (count == -1) throw new RuntimeException ("Error: gs " + g.gangString + " not found!")
+      else if (count >= threshold) {
+        println ("Using gang with sg-pl pattern: " + g.gangString)
+        out.append(g)
+        val indexAssigned = lexicon.add(g.gangString)
+        assert (indexAssigned == out.size - 1)
+      }
+    }
+
+    var itemCounter:Int = 0
+    for (g <- out) itemCounter += g.size()
+
+    println ("\n\nAfter Filtering with threshold of " + threshold + ", " + out.length + " gangs kept, with a total of " + itemCounter + " items.")
+    (out.toArray, lexicon)
   }
 
   def makeVowelSet (in:Array[LexicalItem]):Array[String] = {
@@ -135,6 +163,7 @@ object BrokenPlurals {
 
     // Assign Gangs to each item
     val (gangs, gangLexicon, gangCounter) = makeGangs(lexicalItems)
+    val (filteredGanges, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 2)
 
     // split the data into folds
 
