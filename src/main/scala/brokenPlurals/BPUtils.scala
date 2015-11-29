@@ -66,10 +66,11 @@ object BPUtils {
    * Scoring Methods
    **/
 
-  def dhScore(in: LexicalItem, gang: Gang): Double = {
-    var score: Double = Double.MinValue
-    // todo:DO
-    score
+  // Calulates the similarity between two lexical forms, based on the similarity equation in Dawdy-Hesterberg&Pierrehumbert 2014
+  //  NOTE: the default values here for s and p are the ones used in the paper, but can be tuned as well
+  def dhSimilarity(i: LexicalItem, j:LexicalItem, table:HashMap[(String,String), Double], s:Double = 0.3, p:Double = 1.0): Double = {
+    // DH-PH 2014 notation ==> n_ij = exp(-d_ij/s)^p
+    Math.pow(Math.exp(-weightedLevenshtein(i.sgTrans, j.sgTrans, table) / s), p)
   }
 
   /**
