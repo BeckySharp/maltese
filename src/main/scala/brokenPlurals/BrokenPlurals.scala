@@ -134,10 +134,24 @@ object BrokenPlurals {
 
 
   def main(args:Array[String]) {
-
+    // Load the Singular-Plural pairs
     val lexicalItems = loadCSV("/home/becky/Downloads/broken_plural.csv")
 
-
+    // Make a set of the vowels (for generating CV templates of other forms)
     val vowelSet = makeVowelSet(lexicalItems)
+
+    // Generate CVTemplates for the singular forms
+
+    // Assign Gangs to each item
+
+    // split the data into folds
+
+    // for each fold:
+
+    // for each item:
+
+    // find the closest gang
+
+    // determine accuracy
   }
 }
