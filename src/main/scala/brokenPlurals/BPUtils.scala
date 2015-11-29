@@ -6,7 +6,7 @@ import scala.collection.mutable.HashMap
 /**
  * Created by becky on 11/28/15.
  */
-class BPUtils {
+object BPUtils {
 
   /**
    * Methods to Calculate Distances
@@ -14,7 +14,7 @@ class BPUtils {
 
   // From https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#Scala
   // modified to use a weighted distance
-  def weightedLevenshtein(str1: String, str2: String, table:HashMap[(String,String),Double]): Double = {
+  def weightedLevenshtein(str1: String, str2: String, table: HashMap[(String, String), Double]): Double = {
     val lenStr1 = str1.length
     val lenStr2 = str2.length
 
@@ -24,15 +24,16 @@ class BPUtils {
     for (j <- 0 to lenStr2) d(0)(j) = j
 
     for (i <- 1 to lenStr1; j <- 1 to lenStr2) {
-      val a = str1(i - 1).toString
-      val b = str2(j-1).toString
-      val cost:Double = if (str1(i - 1) == str2(j-1)) 0 else table.getOrElse((decode(a), decode(b)), -1.0)
-      if (cost == -1.0) throw new RuntimeException (s"Error: failed to find (${str1(i - 1)},${str2(j-1)}) in table")
+      val a = decode(str1(i - 1).toString)
+      val b = decode(str2(j - 1).toString)
+      val cost: Double = if (str1(i - 1) == str2(j - 1)) 0 else table.getOrElse((a,b), table.getOrElse((b,a), -1.0))
+
+      if (cost == -1.0) throw new RuntimeException(s"Error: failed to find ($a,$b) in table")
 
       d(i)(j) = min(
-        d(i-1)(j  ) + 1,     // deletion
-        d(i  )(j-1) + 1,     // insertion
-        d(i-1)(j-1) + cost   // substitution
+        d(i - 1)(j) + 1, // deletion
+        d(i)(j - 1) + 1, // insertion
+        d(i - 1)(j - 1) + cost // substitution
       )
     }
 
@@ -42,13 +43,12 @@ class BPUtils {
   def min(nums: Double*): Double = nums.min
 
 
-
   /**
    * Methods to Process Info
    **/
 
   // Decodes the unicode characters for looking up in the other format similarity table
-  def decode (in:String):String = {
+  def decode(in: String): String = {
     if (in == "ʒ") return "S"
     if (in == "ʔ") return "?"
     if (in == "ɛ") return "E"
@@ -66,8 +66,8 @@ class BPUtils {
    * Scoring Methods
    **/
 
-  def dhScore(in:LexicalItem, gang:Gang):Double = {
-    var score:Double = Double.MinValue
+  def dhScore(in: LexicalItem, gang: Gang): Double = {
+    var score: Double = Double.MinValue
     // todo:DO
     score
   }
@@ -76,11 +76,11 @@ class BPUtils {
    * Loading/Saving Methods
    **/
 
-  def loadSimilarities(filename:String):HashMap[(String,String),Double] = {
-    val out = new HashMap[(String,String), Double]
+  def loadSimilarities(filename: String): HashMap[(String, String), Double] = {
+    val out = new HashMap[(String, String), Double]
 
     // Load
-    println ("Loading data from " + filename)
+    println("Loading data from " + filename)
     val source = scala.io.Source.fromFile(filename, "UTF8")
     val lines = source.getLines().toArray
 
@@ -91,10 +91,22 @@ class BPUtils {
       val a = data(0)
       val b = data(1)
       val sim = data(4).toDouble
-      out((a,b)) = sim
+      out((a, b)) = sim
     }
 
     out
+  }
+
+
+  def main(args:Array[String]): Unit = {
+
+    val similarityTableFile = "/home/becky/Documents/maltesePhonemeFeatures.stb"
+    val table = loadSimilarities(similarityTableFile)
+
+    val s1 = "dʔzɛ"
+    val s2 = "dʔsɛ"
+
+    println("Weighted Dist: " + weightedLevenshtein(s1, s2, table))
   }
 
 }
