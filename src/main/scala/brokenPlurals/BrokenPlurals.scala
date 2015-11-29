@@ -1,5 +1,7 @@
 package brokenPlurals
 
+import Structs.{Counter, Lexicon}
+
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer,Set}
@@ -46,12 +48,41 @@ object BrokenPlurals {
     out.toArray
   }
 
-  def makeGangs (in:Array[LexicalItem]):Array[Gang] = {
-    val out = new ArrayBuffer[Gang]
+  def makeGangs (in:Array[LexicalItem], threshold:Int = 2):Array[Gang] = {
+    val lexicon = new Lexicon[String]
+    val counter = new Counter[String]
 
     //todo: DO!
+    // Make the lexicon of possible gangs, assigning gang indices to the Lexical Items as you go
+    for (li <- in) {
+      val gangString = s"[${li.cvTemplateSgTrans}-${li.cvTemplatePlTrans}]"
+      li.gang = lexicon.add(gangString)
+      counter.add(gangString)
+    }
 
-    out.toArray
+    val unsorted = lexicon.table.toList
+    val sorted = unsorted.sortBy(_._2)
+    sorted.foreach(x => println(s"key: ${x._1} \t value: ${x._2} \t count: ${counter.getOrElse(x._1, -1)}"))
+
+
+    var totalCount:Int = 0
+    val gangsUsedLexicon = new Lexicon[String]
+    for (g <- lexicon.table.keySet) {
+      val addin = if (counter.getOrElse(g, -1) >= threshold) counter.getOrElse(g, -1) else 0
+      if (addin > 0) gangsUsedLexicon.add(g)
+      totalCount += addin
+    }
+    println ("\nUsing the threshold of " + threshold + ", there are " + totalCount + " lexical items...")
+    println ("And the number of gangs is: " + gangsUsedLexicon.size)
+    // Here, note that when we restrict to gangs which have at least 2 members, we have 605 data points and 58 gangs to match... this can be tuned
+
+    // Iterate through the LIs and make the array of Gangs
+    val gangs = new Array[Gang](gangsUsedLexicon.size)
+    for (i <- 0 until lexicon.size) {
+      gangs
+    }
+
+    gangs
   }
 
   def makeVowelSet (in:Array[LexicalItem]):Array[String] = {
@@ -101,6 +132,7 @@ object BrokenPlurals {
     BPUtils.generateSingularTemplates(lexicalItems, vowelSet)
 
     // Assign Gangs to each item
+    val gangs = makeGangs(lexicalItems)
 
     // split the data into folds
 
