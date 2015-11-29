@@ -20,6 +20,10 @@ class Lexicon[A] () {
 
   def getOrElse (in:A, default:Int) = table.getOrElse(in, default)
 
+  def set(in:A, index:Int) {
+    table(in) = index
+  }
+
   def size() = table.size
 
 }

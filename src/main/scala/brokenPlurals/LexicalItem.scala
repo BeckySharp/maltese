@@ -7,6 +7,7 @@ class LexicalItem (val sgOrth:String, val plOrth:String, val sgTrans:String, val
                    val gloss:String, val paperType:Int, val cvTemplatePlTrans:String ) {
 
   var gang:Int = -1
+  var gangString:String = ""
   var cvTemplateSgTrans:String = ""
   var cvTemplateSgOrth:String = ""
   var cvTemplatePlOrth:String = ""
