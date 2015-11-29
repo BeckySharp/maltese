@@ -6,6 +6,7 @@ import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer,Set}
 import scala.io.Source
+import scala.util.Random
 
 /**
  * Created by becky on 11/28/15.
@@ -61,21 +62,6 @@ object BrokenPlurals {
       counter.add(gangString)
     }
 
-//    val unsorted = lexicon.table.toList
-//    val sorted = unsorted.sortBy(_._2)
-//    sorted.foreach(x => println(s"key: ${x._1} \t value: ${x._2} \t count: ${counter.getOrElse(x._1, -1)}"))
-
-//    var totalCount:Int = 0
-//    val gangsUsedLexicon = new Lexicon[String]
-//    for (g <- lexicon.table.keySet) {
-//      val addin = if (counter.getOrElse(g, -1) >= threshold) counter.getOrElse(g, -1) else 0
-//      if (addin > 0) gangsUsedLexicon.add(g)
-//      totalCount += addin
-//    }
-//    println ("\nUsing the threshold of " + threshold + ", there are " + totalCount + " lexical items...")
-//    println ("And the number of gangs is: " + gangsUsedLexicon.size)
-//    // Here, note that when we restrict to gangs which have at least 2 members, we have 605 data points and 58 gangs to match... this can be tuned
-
     // Iterate through the LIs and make the array of Gangs
     // Initialize:
     val gangs = new Array[Gang](lexicon.size)
@@ -113,6 +99,50 @@ object BrokenPlurals {
 
     println ("\n\nAfter Filtering with threshold of " + threshold + ", " + out.length + " gangs kept, with a total of " + itemCounter + " items.")
     (out.toArray, lexicon)
+  }
+
+  def makeFolds (in:Array[Gang], lexicon:Lexicon[String], numFolds:Int, numTrials:Int):Array[Fold] = {
+    val trialFolds = new Array[Fold](numTrials)
+
+    for (trial <- 0 until numTrials) {
+      val random = new Random(trial)
+
+      val testingItems = new ArrayBuffer[LexicalItem]
+      val trainingItems = new ArrayBuffer[LexicalItem]
+
+      // for each gang, retrieve the lexical items
+      for (gang <- in) {
+        val items = gang.members.toList
+
+        // shuffle those lexical items
+        val shuffled = random.shuffle(items).toArray
+
+        // distribute into the folds, handling the overflow
+        for (i <- 0 until shuffled.length) {
+          if ((i + 1) % numFolds == 0) testingItems.append(shuffled(i)) // testing
+          else if (i > (shuffled.length - (shuffled.length % numFolds) - 1)) {
+            // Randomly assign the "leftovers"
+            val rand = random.nextDouble()
+            if (rand < 1.0/numFolds.toDouble) testingItems.append(shuffled(i))
+            else trainingItems.append(shuffled(i))
+          }
+          else trainingItems.append(shuffled(i))  // training
+        }
+      }
+
+      // Display
+      println ("\nTrial: " + trial)
+      println ("Number of items in training: " + trainingItems.length)
+      println ("Number of items in testing: " + testingItems.length)
+
+      // Find the gangs from the training data
+      val trainingGangs = makeGangs(trainingItems.toArray)._1
+
+      // Store the trial fold data
+      trialFolds(trial) = new Fold(trainingGangs, testingItems.toArray)
+    }
+
+    trialFolds
   }
 
   def makeVowelSet (in:Array[LexicalItem]):Array[String] = {
@@ -163,9 +193,10 @@ object BrokenPlurals {
 
     // Assign Gangs to each item
     val (gangs, gangLexicon, gangCounter) = makeGangs(lexicalItems)
-    val (filteredGanges, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 2)
+    val (filteredGangs, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 2)
 
     // split the data into folds
+    makeFolds(filteredGangs, filteredLexicon, numFolds = 4, numTrials = 3)
 
     // for each fold:
 
@@ -176,3 +207,5 @@ object BrokenPlurals {
     // determine accuracy
   }
 }
+
+case class Fold(val trainingGangs:Array[Gang], testingData:Array[LexicalItem])
