@@ -61,15 +61,15 @@ object BrokenPlurals {
       val plTransRaw = lexicalItem.plTrans.split("")
 
       // remove ' and ˈ (different characters used)
-      val plTrans = removeApostrophe(plTransRaw.slice(1,1000))
+      val plTrans = BPUtils.removeApostrophe(plTransRaw.slice(1,1000))
 
       // Fix affricates
-      val plTrans1 = fixAffricates(plTrans)
+      val plTrans1 = BPUtils.fixAffricates(plTrans)
 
       // Other?
       if (template.length == plTrans1.length) {
         // Extract the vowels
-        val vowelsFromCurr = extractVowels(plTrans1, template)
+        val vowelsFromCurr = BPUtils.extractVowels(plTrans1, template)
         for (v <- vowelsFromCurr) {
           vowels.add(v)
         }
@@ -86,51 +86,8 @@ object BrokenPlurals {
     vowels.toArray
   }
 
-  def extractVowels (a:Array[String], b:Array[String]):Array[String] = {
-    val out = new ArrayBuffer[String]
-    for (i <- 0 until a.length){
-      if (b(i) == "V") out.append(a(i))
-    }
-    out.toArray
-  }
 
-  def removeApostrophe (in:Array[String]):Array[String] = {
-    val out = new ArrayBuffer[String]
-    for (char <- in) if (!Array("ˈ", "'").contains(char)) out.append(char)
-    out.toArray
-  }
 
-  def fixAffricates(in:Array[String]):Array[String] = {
-    val out = new ArrayBuffer[String]
-    var append = true
-    for (i <- 0 until in.length - 1) {
-      val char = in(i)
-      val next = in(i + 1)
-      //ts, tʃ, or dz
-      if (char == "t" && next == "s") {
-        out.append("T")
-        append = false
-      } else if (char == "t" && next == "ʃ") {
-        out.append("C")
-        append = false
-      } else if (char == "d" && next == "z") {
-        out.append("D")
-        append = false
-      } else if (char == "d" && next == "ʒ") {
-        out.append("J")
-        append = false
-      }
-      else if (append == true) {
-        out.append(char)
-      } else if (append == false && i != in.length - 2) {   // reset for the next character
-        append = true
-      }
-
-    }
-    if (append) out.append(in(in.length - 1))
-
-    out.toArray
-  }
 
 
   def main(args:Array[String]) {
@@ -141,6 +98,7 @@ object BrokenPlurals {
     val vowelSet = makeVowelSet(lexicalItems)
 
     // Generate CVTemplates for the singular forms
+    BPUtils.generateSingularTemplates(lexicalItems, vowelSet)
 
     // Assign Gangs to each item
 

@@ -1,7 +1,6 @@
 package brokenPlurals
 
-import scala.collection.mutable.Set
-import scala.collection.mutable.HashMap
+import scala.collection.mutable.{ArrayBuffer, Set, HashMap}
 
 /**
  * Created by becky on 11/28/15.
@@ -60,6 +59,99 @@ object BPUtils {
     if (in == "ɪ") return "I"
 
     in
+  }
+
+  // Uses the given CV Templates to find the vowel characters
+  def extractVowels (a:Array[String], b:Array[String]):Array[String] = {
+    val out = new ArrayBuffer[String]
+    for (i <- 0 until a.length){
+      if (b(i) == "V") out.append(a(i))
+    }
+    out.toArray
+  }
+
+  // Removes the apostrophes in the transcriptions
+  def removeApostrophe (in:Array[String]):Array[String] = {
+    val out = new ArrayBuffer[String]
+    for (char <- in) if (!Array("ˈ", "'").contains(char)) out.append(char)
+    out.toArray
+  }
+
+  // Combines affricates into one character
+  def fixAffricates(in:Array[String]):Array[String] = {
+    val out = new ArrayBuffer[String]
+    var append = true
+    for (i <- 0 until in.length - 1) {
+      val char = in(i)
+      val next = in(i + 1)
+      //ts, tʃ, or dz
+      if (char == "t" && next == "s") {
+        out.append("T")
+//        println ("\tcurr: " + out.mkString(","))
+        append = false
+      } else if (char == "t" && next == "ʃ") {
+        out.append("C")
+//        println ("\tcurr: " + out.mkString(","))
+        append = false
+      } else if (char == "d" && next == "z") {
+        out.append("D")
+//        println ("\tcurr: " + out.mkString(","))
+        append = false
+      } else if (char == "d" && next == "ʒ") {
+        out.append("J")
+//        println ("\tcurr: " + out.mkString(","))
+        append = false
+      }
+      else if (append == true) {
+        out.append(char)
+//        println ("\tcurr: " + out.mkString(","))
+      } else if (append == false && i != in.length - 1) {   // reset for the next character
+        append = true
+      }
+
+    }
+    if (append){
+      out.append(in(in.length - 1))
+//      println ("\tcurr: " + out.mkString(","))
+    }
+
+    out.toArray
+  }
+
+  // Generates the CV templates for the singular forms of the lexical items
+  def generateSingularTemplates (in:Array[LexicalItem], vowels:Array[String]): Unit = {
+    for (li <- in) {
+//      println("\n---------------------------------------------------------------------\n")
+      li.cvTemplateSgTrans = makeCVTemplate(li.sgTrans, vowels)
+      //println ("SgTrans: " + li.sgTrans + "\tCVTemp: " + li.cvTemplateSgTrans)
+
+      // Checking for inconsistencies
+      val tempCVPlural = makeCVTemplate(li.plTrans, vowels)
+      if (tempCVPlural != li.cvTemplatePlTrans) {
+        println ("plTrans: " + li.plTrans)
+        println ("Provided Plural Template: " + li.cvTemplatePlTrans)
+        println ("  Generated: " + tempCVPlural)
+        sys.exit(1)
+      }
+    }
+  }
+
+  // Given a phonemic transcriptions, generate a CV template
+  def makeCVTemplate (trans:String, vowels:Array[String]):String = {
+    val out = new ArrayBuffer[String]
+    val split = trans.split("").slice(1, 1000)
+    val fixed = fixAffricates(removeApostrophe(split))
+//    println ("trans: " + trans)
+//    println ("fixed split: " + fixed.mkString(", "))
+    for (char <- fixed) {
+      if (vowels.contains(char)) out.append("V")
+      else  out.append("C")
+    }
+    val outString = out.mkString("")
+//    println ("outString: " + outString)
+    assert (outString.length == fixed.length)
+
+    outString
   }
 
   /**
