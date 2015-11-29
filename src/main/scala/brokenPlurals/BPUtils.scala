@@ -1,6 +1,6 @@
 package brokenPlurals
 
-import scala.collection.mutable
+import scala.collection.mutable.Set
 import scala.collection.mutable.HashMap
 
 /**
@@ -97,6 +97,19 @@ object BPUtils {
     out
   }
 
+
+  /**
+   * Debug Methods
+   **/
+  def printAllPhones(in:Array[LexicalItem]): Unit = {
+    val allPhones = Set[String]()
+    for (li <- in) {
+      val currPhones = (li.plTrans++li.sgTrans).split("")
+      for (char <- currPhones) allPhones.add(char)
+    }
+    println ("All Phones:")
+    allPhones.toArray.foreach(println(_))
+  }
 
   def main(args:Array[String]): Unit = {
 

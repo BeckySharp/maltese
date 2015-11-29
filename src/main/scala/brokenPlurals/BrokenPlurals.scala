@@ -133,17 +133,10 @@ object BrokenPlurals {
   }
 
 
-
   def main(args:Array[String]) {
 
     val lexicalItems = loadCSV("/home/becky/Downloads/broken_plural.csv")
-    val allPhones = Set[String]()
-    for (li <- lexicalItems) {
-      val currPhones = (li.plTrans++li.sgTrans).split("")
-      for (char <- currPhones) allPhones.add(char)
-    }
-    println ("All Phones:")
-    allPhones.toArray.foreach(println(_))
+
 
     val vowelSet = makeVowelSet(lexicalItems)
   }
