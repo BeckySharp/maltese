@@ -229,7 +229,8 @@ object BrokenPlurals {
 
       // Assign each testing item a gang using current method
       //val assignments = DHPH2014_GCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
-      val assignments = DHPH2014_restrictedGCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
+      //val assignments = DHPH2014_restrictedGCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
+      val assignments = kNearestNeighbors.classify(trial.trainingGangs, trial.testingData, similarityTable, k = 3)
 
       // Evaluate accuracy
       trialAccuracies(tIdx) = evaluate(trial.testingData, assignments)
