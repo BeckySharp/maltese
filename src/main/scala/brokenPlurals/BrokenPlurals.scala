@@ -17,6 +17,7 @@ class BrokenPlurals {
 
 object BrokenPlurals {
 
+
   // Loads the broken_plural.csv file from the online corpus resources
   def loadCSV (filename:String):Array[LexicalItem] = {
     val out = new ArrayBuffer[LexicalItem]
@@ -34,8 +35,8 @@ object BrokenPlurals {
 
       val sgOrth = data(0)
       val plOrth = data(1)
-      val sgTrans = data(2)
-      val plTrans = data(3)
+      val sgTrans = BPUtils.fixTrans(data(2))
+      val plTrans = BPUtils.fixTrans(data(3))
       val gender = data(4)
       val gloss = data(5)
       val oldType = if (data(6) != "") data(6).toInt else -1
@@ -177,6 +178,23 @@ object BrokenPlurals {
     vowels.toArray
   }
 
+  def evaluate (items:Array[LexicalItem], classifications:Array[(String, Int)]):Double = {
+
+    var nCorrect:Double = 0.0
+    val nItems = items.length
+
+    for (iIdx <- 0 until nItems) {
+      val correct = items(iIdx).gangString
+      if (classifications(iIdx)._1 == correct) nCorrect += 1.0 / classifications(iIdx)._2.toDouble
+    }
+
+    val accuracy = nCorrect / nItems.toDouble
+    println (s"Of $nItems items, $nCorrect classified correctly (with ties handled)")
+    println (s"\tFold Accuracy: $accuracy")
+
+    accuracy
+  }
+
 
 
 
@@ -184,6 +202,10 @@ object BrokenPlurals {
   def main(args:Array[String]) {
     // Load the Singular-Plural pairs
     val lexicalItems = loadCSV("/home/becky/Downloads/broken_plural.csv")
+
+    // Load the Similarity table
+    val similarityTableFile = "/home/becky/Documents/maltesePhonemeFeatures.stb"
+    val similarityTable = BPUtils.loadSimilarities(similarityTableFile)
 
     // Make a set of the vowels (for generating CV templates of other forms)
     val vowelSet = makeVowelSet(lexicalItems)
@@ -193,18 +215,29 @@ object BrokenPlurals {
 
     // Assign Gangs to each item
     val (gangs, gangLexicon, gangCounter) = makeGangs(lexicalItems)
-    val (filteredGangs, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 2)
+    val (filteredGangs, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 4)
 
     // split the data into folds
-    makeFolds(filteredGangs, filteredLexicon, numFolds = 4, numTrials = 3)
+    val numFolds:Int = 4
+    val numTrials:Int = 10
+    val trialFolds = makeFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
+    val trialAccuracies = new Array[Double](numTrials)
 
     // for each fold:
+    for (tIdx <- 0 until numTrials) {
+      val trial = trialFolds(tIdx)
 
-    // for each item:
+      // Assign each testing item a gang using current method
+      //val assignments = DHPH2014_GCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
+      val assignments = DHPH2014_restrictedGCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
 
-    // find the closest gang
+      // Evaluate accuracy
+      trialAccuracies(tIdx) = evaluate(trial.testingData, assignments)
+    }
 
-    // determine accuracy
+    println ("\n----------------------------------------------\n")
+    println(s"Average accuracy across $numTrials: ${trialAccuracies.sum / numTrials}")
+
   }
 }
 

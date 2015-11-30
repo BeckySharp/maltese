@@ -11,6 +11,8 @@ object BPUtils {
    * Methods to Calculate Distances
    **/
 
+
+
   // From https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#Scala
   // modified to use a weighted distance
   def weightedLevenshtein(str1: String, str2: String, table: HashMap[(String, String), Double]): Double = {
@@ -25,7 +27,7 @@ object BPUtils {
     for (i <- 1 to lenStr1; j <- 1 to lenStr2) {
       val a = decode(str1(i - 1).toString)
       val b = decode(str2(j - 1).toString)
-      val cost: Double = if (str1(i - 1) == str2(j - 1)) 0 else table.getOrElse((a,b), table.getOrElse((b,a), -1.0))
+      val cost: Double = if (a == b) 0 else table.getOrElse((a,b), table.getOrElse((b,a), -1.0))
 
       if (cost == -1.0) throw new RuntimeException(s"Error: failed to find ($a,$b) in table")
 
@@ -52,7 +54,7 @@ object BPUtils {
     if (in == "ʔ") return "?"
     if (in == "ɛ") return "E"
     if (in == "ɔ") return "c"
-    if (in == "ʊ") return "U"
+    if (in == "ʊ" || in == "u") return "U"
     if (in == "ħ") return "h"
     if (in == "ɐ") return "A"
     if (in == "ʃ") return "S"
@@ -66,6 +68,25 @@ object BPUtils {
     val out = new ArrayBuffer[String]
     for (i <- 0 until a.length){
       if (b(i) == "V") out.append(a(i))
+    }
+    out.toArray
+  }
+
+  def fixTrans(in:String):String = {
+    var split = in.split("")
+    if (split.head == "") split = split.slice(1,1000)
+    val s1 = removeApostrophe(split)
+    val s2 = fixAffricates(s1)
+    val s3 = fixLongVowels(s2)
+
+    s3.mkString("")
+  }
+
+  def fixLongVowels(in:Array[String]):Array[String] = {
+    val out = new ArrayBuffer[String]
+    for (i <- 0 until in.length) {
+      if (in(i) == "ː") out.append (in(i - 1))
+      else out.append(in(i))
     }
     out.toArray
   }
@@ -165,6 +186,7 @@ object BPUtils {
     // TODO: check?
     Math.pow( Math.exp( - weightedLevenshtein(i.sgTrans, j.sgTrans, table) / s), p)
   }
+
 
   /**
    * Loading/Saving Methods
