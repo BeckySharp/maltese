@@ -2,8 +2,7 @@ package brokenPlurals
 
 import Structs.{Counter, Lexicon}
 
-import scala.collection.immutable.HashMap
-import scala.collection.mutable
+import scala.collection.mutable.HashMap
 import scala.collection.mutable.{ArrayBuffer,Set}
 import scala.io.Source
 import scala.util.Random
@@ -11,12 +10,53 @@ import scala.util.Random
 /**
  * Created by becky on 11/28/15.
  */
-class BrokenPlurals {
-
-}
 
 object BrokenPlurals {
 
+  def doCrossValidationClassification(classifier:Classifier, classicFolds:Array[ClassicFold], table:HashMap[(String, String), Double],
+                                      k:Int = 0, testOn:String = "DEV"): (Array[Double], Double) = {
+    // Initialize
+    val numFolds = classicFolds.length
+    val foldAccuracies = new Array[Double](numFolds)
+
+    // Set up the CV
+    for (i <- 0 until numFolds) {
+      // For each fold:
+      // Step 1: Determine the trainingGangs and the test items (dev or test)
+      // 1a: Determine testing fold and left-out fold
+      val testingFold = i
+      var leftOutFold = if (testOn == "DEV") i + 1 else i - 1
+      if (leftOutFold >= numFolds) leftOutFold = 0
+      else if (leftOutFold <= 0) leftOutFold = numFolds - 1
+      // 1b: Retrieve testing data
+      val testingItems = classicFolds(i).foldData
+
+      // 1c: Retrieve Training Gangs
+      val trainingGangs = new ArrayBuffer[Gang]
+      //val trainingFolds = new ArrayBuffer[Int]
+      for (j <- 0 until numFolds) {
+        //if (j != testingFold && j != leftOutFold) trainingFolds.append(j)
+        if (j != testingFold && j != leftOutFold) trainingGangs.insertAll(trainingGangs.length, classicFolds(j).foldGangs)
+      }
+
+      // Step 2: Classify
+      val classifications = classifier.classify(trainingGangs.toArray, testingItems.toArray, table, k)
+
+      // Step 3: Evaluate
+      val accuracy = evaluate(testingItems.toArray, classifications)
+
+      // Step 4: Store Accuracy
+      foldAccuracies(testingFold) = accuracy
+
+      //      println ("tr: " + trainingFolds.mkString(""))
+//      println ("testing on: " + testingFold)
+//      println ("leftout: " + leftOutFold)
+    }
+
+    // Return all fold accuracies and the average accuracy
+    val avgAcc:Double = foldAccuracies.sum.toDouble / numFolds.toDouble
+    (foldAccuracies, avgAcc)
+  }
 
   // Loads the broken_plural.csv file from the online corpus resources
   def loadCSV (filename:String):Array[LexicalItem] = {
@@ -100,6 +140,67 @@ object BrokenPlurals {
 
     println ("\n\nAfter Filtering with threshold of " + threshold + ", " + out.length + " gangs kept, with a total of " + itemCounter + " items.")
     (out.toArray, lexicon)
+  }
+
+  def makeClassicFolds (in:Array[Gang], lexicon:Lexicon[String], numFolds:Int, numTrials:Int):Array[Array[ClassicFold]] = {
+    // Initialize
+    val trialFolds = new Array[Array[ClassicFold]](numTrials)
+    for (i <- 0 until numTrials) {
+      trialFolds(i) = new Array[ClassicFold](numFolds)
+      for (j <- 0 until numFolds) trialFolds(i)(j) = new ClassicFold
+    }
+
+    for (trial <- 0 until numTrials) {
+      val random = new Random(trial)
+
+//      val testingItems = new ArrayBuffer[LexicalItem]
+//      val trainingItems = new ArrayBuffer[LexicalItem]
+
+      // for each gang, retrieve the lexical items
+      var overflowGoesTo:Int = 0
+      for (gang <- in) {
+        val items = gang.members.toList
+        val numBaseItemsPerFold: Int = Math.floor(items.length / numFolds.toDouble).toInt
+        val overflowStartsAt: Int = numBaseItemsPerFold * numFolds
+        println ("num total items in currentGang: " + items.length)
+        println ("numBaseItemsPerFold: " + numBaseItemsPerFold)
+        println ("overflow starts at: " + overflowStartsAt)
+
+        // shuffle those lexical items
+        val shuffled = random.shuffle(items).toArray
+
+        // DIstribute the main portion of the items
+        var startAt:Int = 0
+        for (fIdx <- 0 until numFolds) {
+          val foldItems = shuffled.slice(startAt, startAt + numBaseItemsPerFold)
+          println ("Fold " + fIdx + ": baseFoldItemsLength = " + foldItems.length)
+          startAt += numBaseItemsPerFold
+          // Add in the first round of data
+          trialFolds(trial)(fIdx).foldData.insertAll(trialFolds(trial)(fIdx).foldData.length, foldItems)
+        }
+
+        // Distribute the overflow items, trying to balance the folds
+        for (itemIndex <- overflowStartsAt until items.length) {
+          trialFolds(trial)(overflowGoesTo).foldData.append(items(itemIndex))
+          overflowGoesTo += 1
+          // Check to see if it has cycled back around to the first fold
+          if (overflowGoesTo == numFolds) overflowGoesTo = 0
+        }
+      }
+
+      // Make the gangs for each fold
+      for (fold <- trialFolds(trial)) {
+        fold.foldGangs = makeGangs(fold.foldData.toArray)._1
+      }
+
+      // Display
+      println ("\nTrial: " + trial)
+      for (i <- 0 until numFolds) {
+        println (s"Fold $i -- Number of items: ${trialFolds(trial)(i).foldData.size}")
+      }
+    }
+
+    trialFolds
   }
 
   def makeFolds (in:Array[Gang], lexicon:Lexicon[String], numFolds:Int, numTrials:Int):Array[Fold] = {
@@ -218,28 +319,51 @@ object BrokenPlurals {
     val (filteredGangs, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 4)
 
     // split the data into folds
-    val numFolds:Int = 4
-    val numTrials:Int = 10
-    val trialFolds = makeFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
+    val numFolds:Int = 5
+    val numTrials:Int = 1
+    val testOn = "DEV"
+    //val trialFolds = makeFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
+    val trialFolds = makeClassicFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
     val trialAccuracies = new Array[Double](numTrials)
 
-    // for each fold:
-    for (tIdx <- 0 until numTrials) {
-      val trial = trialFolds(tIdx)
+    //val classifierMethod = DHPH2014_GCM
+    //val classifierMethod = DHPH2014_restrictedGCM
+    val classifierMethod = kNearestNeighbors
+    val (accuracies, avgAcc) = doCrossValidationClassification(classifierMethod, trialFolds(0), similarityTable, k = 5, testOn)
 
-      // Assign each testing item a gang using current method
-      //val assignments = DHPH2014_GCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
-      //val assignments = DHPH2014_restrictedGCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
-      val assignments = kNearestNeighbors.classify(trial.trainingGangs, trial.testingData, similarityTable, k = 3)
+    // Display:
+    println ("\n=================================================================================================================")
+    println (s"\tclassifier: ${classifierMethod.mkString()}\n\tnumFolds: $numFolds")
+    println ("=================================================================================================================")
+    println ("                                        Final Results - testing on: " + testOn)
+    println ("=================================================================================================================\n")
+    println ("Accuracy across all folds: " + accuracies.mkString("\t"))
+    println ("")
+    println ("Final (Averaged) accuracy): " + avgAcc)
 
-      // Evaluate accuracy
-      trialAccuracies(tIdx) = evaluate(trial.testingData, assignments)
-    }
 
-    println ("\n----------------------------------------------\n")
-    println(s"Average accuracy across $numTrials: ${trialAccuracies.sum / numTrials}")
+//    // for each fold:
+//    for (tIdx <- 0 until numTrials) {
+//      val trial = trialFolds(tIdx)
+//
+//      // Assign each testing item a gang using current method
+//      //val assignments = DHPH2014_GCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
+//      //val assignments = DHPH2014_restrictedGCM.classify(trial.trainingGangs, trial.testingData, similarityTable)
+//      val assignments = kNearestNeighbors.classify(trial.trainingGangs, trial.testingData, similarityTable, k = 3)
+//
+//      // Evaluate accuracy
+//      trialAccuracies(tIdx) = evaluate(trial.testingData, assignments)
+//    }
+//
+//    println ("\n----------------------------------------------\n")
+//    println(s"Average accuracy across $numTrials: ${trialAccuracies.sum / numTrials}")
 
   }
 }
 
-case class Fold(val trainingGangs:Array[Gang], testingData:Array[LexicalItem])
+case class Fold(trainingGangs:Array[Gang], testingData:Array[LexicalItem])
+
+case class ClassicFold () {
+  var foldGangs = new Array[Gang](0)
+  val foldData = new ArrayBuffer[LexicalItem]
+}

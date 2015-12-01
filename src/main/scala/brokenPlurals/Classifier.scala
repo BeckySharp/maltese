@@ -9,6 +9,8 @@ import scala.collection.mutable.{ArrayBuffer, HashMap}
  */
 trait Classifier {
   def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int):Array[(String, Int)]
+
+  def mkString ():String
 }
 
 
@@ -58,6 +60,8 @@ object DHPH2014_GCM extends Classifier {
 
     classifications
   }
+
+  def mkString():String = "Dawdy-Hesterberg & Pierrehumbert (2014) -- GCM"
 }
 
 object DHPH2014_restrictedGCM extends Classifier {
@@ -132,6 +136,8 @@ object DHPH2014_restrictedGCM extends Classifier {
 
     classifications
   }
+
+  def mkString():String = "Dawdy-Hesterberg & Pierrehumbert (2014) -- Restricted GCM"
 }
 
 object kNearestNeighbors extends Classifier {
@@ -222,4 +228,6 @@ object kNearestNeighbors extends Classifier {
 
     classifications
   }
+
+  def mkString():String = "KNN"
 }
