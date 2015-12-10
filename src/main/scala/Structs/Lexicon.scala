@@ -44,3 +44,17 @@ class Counter[A] extends Lexicon[A] () {
   }
 
 }
+
+object Counter {
+  def main (args: Array[String]) {
+    val c = new Counter[String]
+    c.add("hello")
+    c.getOrElse("hello", -1)
+    println ("c: " + c)
+
+    c.add("hello")
+    c.getOrElse("hello", -1)
+    println ("c: " + c)
+
+  }
+}

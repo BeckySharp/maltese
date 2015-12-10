@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="SBT: edu.arizona.sista:processors:3.3:jar">
+    <CLASSES>
+      <root url="jar://$USER_HOME$/.ivy2/cache/edu.arizona.sista/processors/jars/processors-3.3.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

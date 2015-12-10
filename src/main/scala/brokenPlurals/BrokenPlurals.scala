@@ -1,6 +1,8 @@
 package brokenPlurals
 
-import Structs.{Counter, Lexicon}
+//import Structs.{Counter, Lexicon}
+
+import edu.arizona.sista.struct.{Counter, Lexicon}
 
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.{ArrayBuffer,Set}
@@ -14,7 +16,7 @@ import scala.util.Random
 object BrokenPlurals {
 
   def doCrossValidationClassification(classifier:Classifier, classicFolds:Array[ClassicFold], table:HashMap[(String, String), Double],
-                                      k:Int = 0, testOn:String = "DEV"): (Array[Double], Double) = {
+                                      k:Int = 0, testOn:String = "DEV", restricted:Boolean): (Array[Double], Double) = {
     // Initialize
     val numFolds = classicFolds.length
     val foldAccuracies = new Array[Double](numFolds)
@@ -33,14 +35,26 @@ object BrokenPlurals {
 
       // 1c: Retrieve Training Gangs
       val trainingGangs = new ArrayBuffer[Gang]
+      val trainingItems = new ArrayBuffer[LexicalItem]
       //val trainingFolds = new ArrayBuffer[Int]
       for (j <- 0 until numFolds) {
         //if (j != testingFold && j != leftOutFold) trainingFolds.append(j)
-        if (j != testingFold && j != leftOutFold) trainingGangs.insertAll(trainingGangs.length, classicFolds(j).foldGangs)
+        if (j != testingFold && j != leftOutFold) {
+          trainingGangs.insertAll(trainingGangs.length, classicFolds(j).foldGangs)
+          trainingItems.insertAll(trainingItems.length, classicFolds(j).foldData)
+        }
       }
 
+      // Check the ceiling performance:
+      val ceiling = checkCeiling(testingItems.toArray, trainingGangs.toArray)
+      println (s"** Fold $i Ceiling: $ceiling")
+
+
       // Step 2: Classify
-      val classifications = classifier.classify(trainingGangs.toArray, testingItems.toArray, table, k)
+      val allItems = new ArrayBuffer[LexicalItem]
+      allItems.insertAll(0,trainingItems)
+      allItems.insertAll(allItems.length, testingItems)
+      val classifications = classifier.classify(trainingGangs.toArray, allItems.toArray, table, k, trainingItems.length, restricted)
 
       // Step 3: Evaluate
       val accuracy = evaluate(testingItems.toArray, classifications)
@@ -56,6 +70,29 @@ object BrokenPlurals {
     // Return all fold accuracies and the average accuracy
     val avgAcc:Double = foldAccuracies.sum.toDouble / numFolds.toDouble
     (foldAccuracies, avgAcc)
+  }
+
+  def checkCeiling (items:Array[LexicalItem], gangs:Array[Gang]):Double = {
+    val itemsCounter = new Counter[String]
+    for (item <- items) {
+      itemsCounter.incrementCount(item.cvTemplateSgTrans)
+    }
+
+    val choicesCounter = new Counter[String]
+    for (gang <- gangs) {
+      val singularForm = gang.getSingular()
+      choicesCounter.incrementCount(singularForm)
+    }
+
+    val allTestItemsTemplates = itemsCounter.keySet
+    val allTemplateChoices = choicesCounter.keySet
+
+    val testingTemplatesSeenInTraining = allTestItemsTemplates.intersect(allTemplateChoices)
+    val ceiling:Double = testingTemplatesSeenInTraining.size.toDouble / allTestItemsTemplates.size.toDouble
+
+    println (s"** Of ${allTestItemsTemplates.size} templates seen in testing, ${testingTemplatesSeenInTraining.size} were available for classification...")
+
+    ceiling
   }
 
   // Loads the broken_plural.csv file from the online corpus resources
@@ -100,7 +137,7 @@ object BrokenPlurals {
       val gangString = s"[${li.cvTemplateSgTrans}-${li.cvTemplatePlTrans}]"
       li.gang = lexicon.add(gangString)
       li.gangString = gangString
-      counter.add(gangString)
+      counter.incrementCount(gangString)
     }
 
     // Iterate through the LIs and make the array of Gangs
@@ -125,7 +162,7 @@ object BrokenPlurals {
     val out = new ArrayBuffer[Gang]
 
     for (g <- in) {
-      val count = counter.getOrElse(g.gangString, -1)
+      val count = counter.getCount(g.gangString)
       if (count == -1) throw new RuntimeException ("Error: gs " + g.gangString + " not found!")
       else if (count >= threshold) {
         println ("Using gang with sg-pl pattern: " + g.gangString)
@@ -321,7 +358,8 @@ object BrokenPlurals {
     // split the data into folds
     val numFolds:Int = 5
     val numTrials:Int = 1
-    val testOn = "DEV"
+    //val testOn = "DEV"
+    val testOn = "TEST"
     //val trialFolds = makeFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
     val trialFolds = makeClassicFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
     val trialAccuracies = new Array[Double](numTrials)
@@ -329,7 +367,10 @@ object BrokenPlurals {
     //val classifierMethod = DHPH2014_GCM
     //val classifierMethod = DHPH2014_restrictedGCM
     val classifierMethod = kNearestNeighbors
-    val (accuracies, avgAcc) = doCrossValidationClassification(classifierMethod, trialFolds(0), similarityTable, k = 5, testOn)
+    //val classifierMethod = LogisticRegression
+    val restricted:Boolean = true
+
+    val (accuracies, avgAcc) = doCrossValidationClassification(classifierMethod, trialFolds(0), similarityTable, k = 5, testOn, restricted)
 
     // Display:
     println ("\n=================================================================================================================")

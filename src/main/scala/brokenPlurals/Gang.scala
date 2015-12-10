@@ -10,6 +10,8 @@ class Gang (var gangString:String) {
 
   def add (in:LexicalItem) = members.append(in)
 
+  def getSingular():String = gangString.split("-")(0).split("").slice(2,1000).mkString("")
+
   def size():Int = members.length
 
 }
