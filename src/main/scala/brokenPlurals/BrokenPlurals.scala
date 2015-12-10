@@ -16,10 +16,11 @@ import scala.util.Random
 object BrokenPlurals {
 
   def doCrossValidationClassification(classifier:Classifier, classicFolds:Array[ClassicFold], table:HashMap[(String, String), Double],
-                                      k:Int = 0, testOn:String = "DEV", restricted:Boolean): (Array[Double], Double) = {
+                                      k:Int = 0, testOn:String = "DEV", restricted:Boolean): (Array[Double], Double, Array[Double]) = {
     // Initialize
     val numFolds = classicFolds.length
     val foldAccuracies = new Array[Double](numFolds)
+    val allResults = new ArrayBuffer[Double]
 
     // Set up the CV
     for (i <- 0 until numFolds) {
@@ -57,19 +58,22 @@ object BrokenPlurals {
       val classifications = classifier.classify(trainingGangs.toArray, allItems.toArray, table, k, trainingItems.length, restricted)
 
       // Step 3: Evaluate
-      val accuracy = evaluate(testingItems.toArray, classifications)
+      val (accuracy, foldResults) = evaluate(testingItems.toArray, classifications)
 
       // Step 4: Store Accuracy
       foldAccuracies(testingFold) = accuracy
+
+      // Step 5: Store Results
+      allResults.insertAll(allResults.length, foldResults)
 
       //      println ("tr: " + trainingFolds.mkString(""))
 //      println ("testing on: " + testingFold)
 //      println ("leftout: " + leftOutFold)
     }
 
-    // Return all fold accuracies and the average accuracy
+    // Return all fold accuracies and the average accuracy and all results
     val avgAcc:Double = foldAccuracies.sum.toDouble / numFolds.toDouble
-    (foldAccuracies, avgAcc)
+    (foldAccuracies, avgAcc, allResults.toArray)
   }
 
   def checkCeiling (items:Array[LexicalItem], gangs:Array[Gang]):Double = {
@@ -316,23 +320,61 @@ object BrokenPlurals {
     vowels.toArray
   }
 
-  def evaluate (items:Array[LexicalItem], classifications:Array[(String, Int)]):Double = {
+  // Returns both the accuracy for the fold (Double) as well as an array of indicators as to whether a given question was correct
+  // or not (for use with statistical post processing)
+  def evaluate (items:Array[LexicalItem], classifications:Array[(String, Int)]):(Double, Array[Double]) = {
 
     var nCorrect:Double = 0.0
     val nItems = items.length
+    val resultsByQuestion = new Array[Double](nItems)
 
     for (iIdx <- 0 until nItems) {
       val correct = items(iIdx).gangString
-      if (classifications(iIdx)._1 == correct) nCorrect += 1.0 / classifications(iIdx)._2.toDouble
+      if (classifications(iIdx)._1 == correct) {
+        val questionAccuracy = 1.0 / classifications(iIdx)._2.toDouble
+        nCorrect += questionAccuracy
+        resultsByQuestion(iIdx) = questionAccuracy
+      } else resultsByQuestion(iIdx) = 0
     }
 
     val accuracy = nCorrect / nItems.toDouble
     println (s"Of $nItems items, $nCorrect classified correctly (with ties handled)")
     println (s"\tFold Accuracy: $accuracy")
 
-    accuracy
+    (accuracy, resultsByQuestion)
   }
 
+  // Run stats using bootstrap resampling to determine the p-value
+  def runStats(a:Array[Double], b:Array[Double], nSamples:Int, randomSeed:Int = 426):Double = {
+    val randA = new Random(randomSeed)
+    val randB = new Random(randomSeed + 1)
+    val nItems = a.length
+    assert (b.length == nItems)
+
+    var aBetter:Double = 0.0
+
+    for (i <- 0 until nSamples) {
+      var aSample:Double = 0.0
+      var bSample:Double = 0.0
+
+      // Generate a sample from both inputs
+      for (j <- 0 until nSamples) {
+        val aIndex = randA.nextInt(nItems)
+        val bIndex = randB.nextInt(nItems)
+        aSample += a(aIndex)
+        bSample += b(bIndex)
+      }
+
+      // Determine which is higher
+      if (aSample > bSample) aBetter += 1.0
+      if (aSample == bSample) {
+        println ("Eek! a tie in the sampling!")
+        aBetter += 0.5
+      }
+    }
+
+    aBetter / nSamples.toDouble
+  }
 
 
 
@@ -362,25 +404,63 @@ object BrokenPlurals {
     val testOn = "TEST"
     //val trialFolds = makeFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
     val trialFolds = makeClassicFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
-    val trialAccuracies = new Array[Double](numTrials)
+    //val trialAccuracies = new Array[Double](numTrials)
 
-    //val classifierMethod = DHPH2014_GCM
-    //val classifierMethod = DHPH2014_restrictedGCM
-    val classifierMethod = kNearestNeighbors
-    //val classifierMethod = LogisticRegression
-    val restricted:Boolean = true
 
-    val (accuracies, avgAcc) = doCrossValidationClassification(classifierMethod, trialFolds(0), similarityTable, k = 5, testOn, restricted)
+    // ----------------------------------------------------------------------------------------------------
+    //  Classification Method 1
+    // ----------------------------------------------------------------------------------------------------
+
+    //val classifierMethod1 = DHPH2014_GCM
+    val classifierMethod1 = DHPH2014_restrictedGCM
+    //val classifierMethod1 = kNearestNeighbors
+    //val classifierMethod1 = LogisticRegression
+    val restricted1:Boolean = true
+
+    val (accuracies1, avgAcc1, results1) = doCrossValidationClassification(classifierMethod1, trialFolds(0), similarityTable, k = 5, testOn, restricted1)
 
     // Display:
     println ("\n=================================================================================================================")
-    println (s"\tclassifier: ${classifierMethod.mkString()}\n\tnumFolds: $numFolds")
+    println (s"\tclassifier 1: ${classifierMethod1.mkString()}\n\tnumFolds: $numFolds")
     println ("=================================================================================================================")
     println ("                                        Final Results - testing on: " + testOn)
     println ("=================================================================================================================\n")
-    println ("Accuracy across all folds: " + accuracies.mkString("\t"))
+    println ("Accuracy across all folds: " + accuracies1.mkString("\t"))
     println ("")
-    println ("Final (Averaged) accuracy): " + avgAcc)
+    println ("Final (Averaged) accuracy): " + avgAcc1)
+
+    // ----------------------------------------------------------------------------------------------------
+    //  Classification Method 2
+    // ----------------------------------------------------------------------------------------------------
+
+
+    //val classifierMethod2 = DHPH2014_GCM
+    //val classifierMethod2 = DHPH2014_restrictedGCM
+    //val classifierMethod2 = kNearestNeighbors
+    val classifierMethod2 = LogisticRegression
+    val restricted2:Boolean = true
+
+    val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(classifierMethod2, trialFolds(0), similarityTable, k = 5, testOn, restricted2)
+
+    // Display:
+    println ("\n=================================================================================================================")
+    println (s"\tclassifier 2: ${classifierMethod2.mkString()}\n\tnumFolds: $numFolds")
+    println ("=================================================================================================================")
+    println ("                                        Final Results - testing on: " + testOn)
+    println ("=================================================================================================================\n")
+    println ("Accuracy across all folds: " + accuracies2.mkString("\t"))
+    println ("")
+    println ("Final (Averaged) accuracy): " + avgAcc2)
+
+
+    // Statistical Analysis
+    val nSamples = 100000
+    val pValue = runStats(results1, results2, nSamples)
+    // Display:
+    println ("\n\n=================================================================================================================")
+    println (s"\tp-value: $pValue \t (using $nSamples samples)")
+    println ("=================================================================================================================")
+
 
 
 //    // for each fold:
