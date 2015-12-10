@@ -247,6 +247,8 @@ object LogisticRegression extends Classifier {
   val MIN_EXTENSION = "_MinSim"
   val MAX_EXTENSION = "_MaxSim"
   val AVG_EXTENSION = "_AvgSim"
+  val SIZE_EXTENSION = "_size"
+  val DHSIM_EXTENSION = "_newMinSim"
 
   def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int, n:Int, restricted:Boolean):Array[(String, Int)] = {
     // Here - n is the cutoff saying where training data ends and testing data begins
@@ -259,6 +261,9 @@ object LogisticRegression extends Classifier {
       featureLexicon.add("g" + gangIndex + MIN_EXTENSION)
       featureLexicon.add("g" + gangIndex + MAX_EXTENSION)
       featureLexicon.add("g" + gangIndex + AVG_EXTENSION)
+      featureLexicon.add("g" + gangIndex + SIZE_EXTENSION)
+      featureLexicon.add("g" + gangIndex + DHSIM_EXTENSION)
+
     }
 
     // Make an RVFDataset for the training items
@@ -312,14 +317,27 @@ object LogisticRegression extends Classifier {
 
     // Make a Features Counter
     val counter = new Counter[Int]
+
+    // For the DHPH similarities - find the overall similarity to all lexical items
+    var overallSim:Double = 0.0
+    for (i <- 0 until gangs.length) {
+      for (m <- gangs(i).members) {
+        val simToM = BPUtils.dhSimilarity(item, m, table)
+        overallSim += simToM
+      }
+    }
+
     for (gangIndex <- 0 until gangs.length) {
       // Find the feature values for this gang
       val (min, max, avg) = findFeatures(item, gangs(gangIndex), table)
+      val dhSim = (avg * gangs(gangIndex).size()) / overallSim
 
       // Find the feature indices for the features for this gang
       val minFeatureIndex = featureLexicon.get("g" + gangIndex + MIN_EXTENSION).getOrElse(-1)
       val maxFeatureIndex = featureLexicon.get("g" + gangIndex + MAX_EXTENSION).getOrElse(-1)
       val avgFeatureIndex = featureLexicon.get("g" + gangIndex + AVG_EXTENSION).getOrElse(-1)
+      val dhSimFeatureIndex = featureLexicon.get("g" + gangIndex + DHSIM_EXTENSION).getOrElse(-1)
+      val sizeFeatureIndex = featureLexicon.get("g" + gangIndex + SIZE_EXTENSION).getOrElse(-1)
 
       // Determine if you're resticted...
       var addIn:Boolean = true
@@ -338,6 +356,8 @@ object LogisticRegression extends Classifier {
         counter.setCount(minFeatureIndex, min)
         counter.setCount(maxFeatureIndex, max)
         counter.setCount(avgFeatureIndex, avg)
+        counter.setCount(sizeFeatureIndex, gangs(gangIndex).size())
+        counter.setCount(dhSimFeatureIndex, dhSim)
       }
 
 
