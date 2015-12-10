@@ -1,7 +1,7 @@
 package brokenPlurals
 
 //import Structs.{Lexicon, Counter}
-import edu.arizona.sista.learning.{LogisticRegressionClassifier, RVFDataset, RVFDatum}
+import edu.arizona.sista.learning._
 import edu.arizona.sista.struct.{Counter, Lexicon}
 
 //import scala.collection.mutable
@@ -268,19 +268,37 @@ object LogisticRegression extends Classifier {
 
     // Make an RVFDataset for the training items
     val trainingDataset = makeDataset(trainingItems, gangs, featureLexicon, table, restricted)
+    val scaleRange = Datasets.svmScaleRVFDataset(trainingDataset, 0.0, 1.0)
+
 
     // Initialize the Logistic Regression Classifier
-    val classifier = new LogisticRegressionClassifier[String, Int]()
+    val classifier = new LogisticRegressionClassifier[String, Int](C = 1.0, bias = true)
+    //val classifier = new Naive
 
     // Train
     classifier.train(trainingDataset)
+    val weights = classifier.getWeights(verbose = true)
+
+    // Display weights
+    println ("Weights: \n")
+    for (label <- weights.keySet) {
+      println ("Label: " + label)
+      println ("\tweights: ")
+      val classCounter = weights.get(label).get
+      for (index <- classCounter.keySet){
+        val featureName = featureLexicon.get(index)
+        println (s"f$index: $featureName -- ${classCounter.getCount(index)}")
+
+      }
+    }
 
     // Test
     var accuracy:Double = 0.0
     val classifications = new ArrayBuffer[(String, Int)]
     for (i <- 0 until testingItems.length) {
       val testItem = testingItems(i)
-      val datum = makeDatum (testItem, gangs, featureLexicon, table, restricted)
+      val datum = makeDatum (testItem, gangs, featureLexicon, table, restricted, rescale = true, scaleRange)
+
       val predictedLabel = classifier.classOf(datum)
       val distribution = classifier.scoresOf(datum)
 
@@ -301,17 +319,19 @@ object LogisticRegression extends Classifier {
 
   // Make an RVFDataset from LexicalItems and Gangs
   def makeDataset(items:Array[LexicalItem], gangs:Array[Gang], featureLexicon:Lexicon[String],
-                  table:HashMap[(String, String), Double], restricted:Boolean = false):RVFDataset[String,Int] = {
+                  table:HashMap[(String, String), Double], restricted:Boolean = false, rescale:Boolean = false,
+                  scaleRange:ScaleRange[Int] = new ScaleRange[Int]):RVFDataset[String,Int] = {
     val dataset = new RVFDataset[String, Int]()
     for (item <- items) {
-      dataset += makeDatum(item, gangs, featureLexicon, table, restricted)
+      dataset += makeDatum(item, gangs, featureLexicon, table, restricted, rescale, scaleRange)
     }
 
       dataset
   }
 
   def makeDatum(item:LexicalItem, gangs:Array[Gang], featureLexicon:Lexicon[String],
-                table:HashMap[(String, String), Double], restricted:Boolean = false):RVFDatum[String, Int] = {
+                table:HashMap[(String, String), Double], restricted:Boolean = false, rescale:Boolean = false,
+                scaleRange:ScaleRange[Int]):RVFDatum[String, Int] = {
 
     val label = item.gangString
 
@@ -362,6 +382,12 @@ object LogisticRegression extends Classifier {
 
 
     }
+
+    if (rescale) {
+      val newCounter = Datasets.svmScaleDatum(counter, scaleRange, 0.0, 1.0)
+      return new RVFDatum[String, Int](label, newCounter)
+    }
+
 
     // Return an RVFDatum for this item
     new RVFDatum[String, Int](label, counter)

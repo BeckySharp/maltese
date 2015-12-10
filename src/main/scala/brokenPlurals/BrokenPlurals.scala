@@ -400,8 +400,8 @@ object BrokenPlurals {
     // split the data into folds
     val numFolds:Int = 5
     val numTrials:Int = 1
-    val testOn = "DEV"
-    //val testOn = "TEST"
+    //val testOn = "DEV"
+    val testOn = "TEST"
     //val trialFolds = makeFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
     val trialFolds = makeClassicFolds(filteredGangs, filteredLexicon, numFolds, numTrials)
     //val trialAccuracies = new Array[Double](numTrials)
@@ -415,6 +415,7 @@ object BrokenPlurals {
     //val classifierMethod1 = DHPH2014_restrictedGCM
     //val classifierMethod1 = kNearestNeighbors
     val classifierMethod1 = LogisticRegression
+    //val restricted1:Boolean = false
     val restricted1:Boolean = true
 
     val (accuracies1, avgAcc1, results1) = doCrossValidationClassification(classifierMethod1, trialFolds(0), similarityTable, k = 5, testOn, restricted1)
@@ -434,11 +435,11 @@ object BrokenPlurals {
     // ----------------------------------------------------------------------------------------------------
 
     sys.exit(1)
-    //val classifierMethod2 = DHPH2014_GCM
-    val classifierMethod2 = DHPH2014_restrictedGCM
+    val classifierMethod2 = DHPH2014_GCM
+    //val classifierMethod2 = DHPH2014_restrictedGCM
     //val classifierMethod2 = kNearestNeighbors
     //val classifierMethod2 = LogisticRegression
-    val restricted2:Boolean = true
+    val restricted2:Boolean = false
 
     val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(classifierMethod2, trialFolds(0), similarityTable, k = 5, testOn, restricted2)
 
@@ -454,7 +455,7 @@ object BrokenPlurals {
 
 
     // Statistical Analysis
-    val nSamples = 10000
+    val nSamples = 100000
     val pValue = runStats(results1, results2, nSamples, randomSeed = 6)
     // Display:
     println ("\n\n=================================================================================================================")
