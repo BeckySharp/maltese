@@ -21,6 +21,7 @@ object BrokenPlurals {
     val numFolds = classicFolds.length
     val foldAccuracies = new Array[Double](numFolds)
     val allResults = new ArrayBuffer[Double]
+    val chancePerformances = new Array[Double](numFolds)
 
     // Set up the CV
     for (i <- 0 until numFolds) {
@@ -47,8 +48,9 @@ object BrokenPlurals {
       }
 
       // Check the ceiling performance:
-      val ceiling = checkCeiling(testingItems.toArray, trainingGangs.toArray)
-      println (s"** Fold $i Ceiling: $ceiling")
+      val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, trainingGangs.toArray)
+      chancePerformances(i) = chancePerformance
+      println (s"** Fold $i Ceiling: $ceiling \t Chance Performance =  $chancePerformance")
 
 
       // Step 2: Classify
@@ -71,12 +73,14 @@ object BrokenPlurals {
 //      println ("leftout: " + leftOutFold)
     }
 
+    println ("Final Chance performance: " + chancePerformances.sum)
+
     // Return all fold accuracies and the average accuracy and all results
     val avgAcc:Double = foldAccuracies.sum.toDouble / numFolds.toDouble
     (foldAccuracies, avgAcc, allResults.toArray)
   }
 
-  def checkCeiling (items:Array[LexicalItem], gangs:Array[Gang]):Double = {
+  def checkCeiling (items:Array[LexicalItem], gangs:Array[Gang]):(Double, Double) = {
     val itemsCounter = new Counter[String]
     for (item <- items) {
       itemsCounter.incrementCount(item.cvTemplateSgTrans)
@@ -96,7 +100,19 @@ object BrokenPlurals {
 
     println (s"** Of ${allTestItemsTemplates.size} templates seen in testing, ${testingTemplatesSeenInTraining.size} were available for classification...")
 
-    ceiling
+
+    // Calculate Chance performance
+    var chancePerformance:Double = 0.0
+    for (item <- items) {
+      var optionsCounter:Double = 0.0
+      for (gang <- gangs) {
+        val sgForm = gang.getSingular()
+        if (item.cvTemplateSgTrans == sgForm) optionsCounter += 1.0
+      }
+      chancePerformance += 1.0 / optionsCounter
+    }
+
+    (ceiling, chancePerformance / items.length)
   }
 
   // Loads the broken_plural.csv file from the online corpus resources
@@ -393,6 +409,8 @@ object BrokenPlurals {
     // Generate CVTemplates for the singular forms
     BPUtils.generateSingularTemplates(lexicalItems, vowelSet)
 
+    // todo - check lev dist! 1/sim?
+
     // Assign Gangs to each item
     val (gangs, gangLexicon, gangCounter) = makeGangs(lexicalItems)
     val (filteredGangs, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 4)
@@ -415,8 +433,8 @@ object BrokenPlurals {
     //val classifierMethod1 = DHPH2014_restrictedGCM
     //val classifierMethod1 = kNearestNeighbors
     val classifierMethod1 = LogisticRegression
-    //val restricted1:Boolean = false
-    val restricted1:Boolean = true
+    val restricted1:Boolean = false
+    //val restricted1:Boolean = true
 
     val (accuracies1, avgAcc1, results1) = doCrossValidationClassification(classifierMethod1, trialFolds(0), similarityTable, k = 5, testOn, restricted1)
 
@@ -435,11 +453,11 @@ object BrokenPlurals {
     // ----------------------------------------------------------------------------------------------------
 
     sys.exit(1)
-    val classifierMethod2 = DHPH2014_GCM
+    //val classifierMethod2 = DHPH2014_GCM
     //val classifierMethod2 = DHPH2014_restrictedGCM
     //val classifierMethod2 = kNearestNeighbors
-    //val classifierMethod2 = LogisticRegression
-    val restricted2:Boolean = false
+    val classifierMethod2 = LogisticRegression
+    val restricted2:Boolean = true
 
     val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(classifierMethod2, trialFolds(0), similarityTable, k = 5, testOn, restricted2)
 
@@ -455,7 +473,7 @@ object BrokenPlurals {
 
 
     // Statistical Analysis
-    val nSamples = 100000
+    val nSamples = 10000
     val pValue = runStats(results1, results2, nSamples, randomSeed = 6)
     // Display:
     println ("\n\n=================================================================================================================")

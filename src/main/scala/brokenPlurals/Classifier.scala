@@ -277,42 +277,50 @@ object LogisticRegression extends Classifier {
 
     // Train
     classifier.train(trainingDataset)
-    val weights = classifier.getWeights(verbose = true)
+    //val weights = classifier.getWeights(verbose = true)
 
     // Display weights
-    println ("Weights: \n")
-    for (label <- weights.keySet) {
-      println ("Label: " + label)
-      println ("\tweights: ")
-      val classCounter = weights.get(label).get
-      for (index <- classCounter.keySet){
-        val featureName = featureLexicon.get(index)
-        println (s"f$index: $featureName -- ${classCounter.getCount(index)}")
-
-      }
-    }
+//    println ("Weights: \n")
+//    for (label <- weights.keySet) {
+//      println ("Label: " + label)
+//      println ("\tweights: ")
+//      val classCounter = weights.get(label).get
+//      for (index <- classCounter.keySet){
+//        val featureName = featureLexicon.get(index)
+//        println (s"f$index: $featureName -- ${classCounter.getCount(index)}")
+//
+//      }
+//    }
 
     // Test
     var accuracy:Double = 0.0
     val classifications = new ArrayBuffer[(String, Int)]
+    val confidencesCorrect = new ArrayBuffer[Double]
+    val confidencesIncorrect = new ArrayBuffer[Double]
+
     for (i <- 0 until testingItems.length) {
       val testItem = testingItems(i)
       val datum = makeDatum (testItem, gangs, featureLexicon, table, restricted, rescale = true, scaleRange)
 
       val predictedLabel = classifier.classOf(datum)
       val distribution = classifier.scoresOf(datum)
+      val confidence = distribution.getCount(predictedLabel)
 
       classifications.append((predictedLabel, 1))
 
       if (predictedLabel == testItem.gangString) {
         println ("Successful classification - " + predictedLabel)
         accuracy += 1.0 / testingItems.length
+        confidencesCorrect.append(confidence)
       } else {
         println ("Failed classification - predicted: " + predictedLabel + "\tcorrect: " + testItem.gangString)
+        confidencesIncorrect.append(confidence)
       }
     }
 
     println ("Accuracy: " + accuracy)
+    println ("Average Confidence when CORRECT: " + confidencesCorrect.sum / confidencesCorrect.length.toDouble)
+    println ("Average Confidence when INCORRECT: " + confidencesIncorrect.sum / confidencesIncorrect.length.toDouble)
 
     classifications.toArray
   }
