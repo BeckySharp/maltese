@@ -457,7 +457,7 @@ object BrokenPlurals {
     //val classifierMethod2 = DHPH2014_restrictedGCM
     //val classifierMethod2 = kNearestNeighbors
     val classifierMethod2 = LogisticRegression
-    val restricted2:Boolean = true
+    val restricted2:Boolean = false
 
     val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(classifierMethod2, trialFolds(0), similarityTable, k = 5, testOn, restricted2)
 

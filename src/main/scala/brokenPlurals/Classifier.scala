@@ -381,7 +381,7 @@ object LogisticRegression extends Classifier {
 
       // Add the gang features to the Counter if not restricted
       if (addIn) {
-        counter.setCount(minFeatureIndex, min)
+        //counter.setCount(minFeatureIndex, min)
         counter.setCount(maxFeatureIndex, max)
         counter.setCount(avgFeatureIndex, avg)
         counter.setCount(sizeFeatureIndex, gangs(gangIndex).size())
