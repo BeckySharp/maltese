@@ -2,8 +2,11 @@ package brokenPlurals
 
 //import Structs.{Counter, Lexicon}
 
+import java.io.PrintWriter
+
 import edu.arizona.sista.struct.{Counter, Lexicon}
 
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.{ArrayBuffer,Set}
 import scala.io.Source
@@ -415,6 +418,23 @@ object BrokenPlurals {
     val (gangs, gangLexicon, gangCounter) = makeGangs(lexicalItems)
     val (filteredGangs, filteredLexicon) = filterGangs(gangs, gangCounter, threshold = 4)
 
+//    val pwShiloh1 = new PrintWriter("cvTemplatesSing_filt4.txt")
+////    val pwShiloh2 = new PrintWriter("cvTemplatesPlural_flt5.txt")
+//    var singSet = new ArrayBuffer[String]
+////    var plurSet = new ArrayBuffer[String]
+//    for (g <- filteredGangs) {
+//      val cv = g.gangString.split("-")
+//      singSet += cv(0)
+////      plurSet += cv(1)
+//    }
+//    val set = singSet.toSet
+//    for (item <- set) {
+//      pwShiloh1.println(item)
+//    }
+//    pwShiloh1.close()
+////    pwShiloh2.close()
+//    sys.exit(0)
+
     // split the data into folds
     val numFolds:Int = 5
     val numTrials:Int = 1
@@ -433,8 +453,8 @@ object BrokenPlurals {
     //val classifierMethod1 = DHPH2014_restrictedGCM
     //val classifierMethod1 = kNearestNeighbors
     val classifierMethod1 = LogisticRegression
+//    val restricted1:Boolean = false
     val restricted1:Boolean = false
-    //val restricted1:Boolean = true
 
     val (accuracies1, avgAcc1, results1) = doCrossValidationClassification(classifierMethod1, trialFolds(0), similarityTable, k = 5, testOn, restricted1)
 
