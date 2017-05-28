@@ -82,6 +82,20 @@ object BPUtils {
     s3.mkString("")
   }
 
+  // Another version of the above method used for generating the map from ortho to transcription.
+  // This version does NOT "fix" long vowels
+  def fixTransForMap(in:String):String = {
+    var split = in.split("")
+    if (split.head == "") split = split.slice(1,1000)
+    val s1 = removeApostrophe(split)
+    println("s1: " + s1.mkString(""))
+    val s2 = convertOrthoAffricatesToTransCharacter(s1)
+    println("s2: " + s2.mkString(""))
+    //val s3 = fixLongVowels(s2)
+
+    s2.mkString("")
+  }
+
   def fixLongVowels(in:Array[String]):Array[String] = {
     val out = new ArrayBuffer[String]
     for (i <- 0 until in.length) {
@@ -106,19 +120,19 @@ object BPUtils {
       val char = in(i)
       val next = in(i + 1)
       //ts, tʃ, or dz
-      if (char == "t" && next == "s") {
+      if (char == "t" && next == "s") {            //z
         out.append("T")
 //        println ("\tcurr: " + out.mkString(","))
         append = false
-      } else if (char == "t" && next == "ʃ") {
+      } else if (char == "t" && next == "ʃ") {     //ċ
         out.append("C")
 //        println ("\tcurr: " + out.mkString(","))
         append = false
-      } else if (char == "d" && next == "z") {
+      } else if (char == "d" && next == "z") {     // none
         out.append("D")
 //        println ("\tcurr: " + out.mkString(","))
         append = false
-      } else if (char == "d" && next == "ʒ") {
+      } else if (char == "d" && next == "ʒ") {     // ġ
         out.append("J")
 //        println ("\tcurr: " + out.mkString(","))
         append = false
@@ -136,6 +150,24 @@ object BPUtils {
 //      println ("\tcurr: " + out.mkString(","))
     }
 
+    out.toArray
+  }
+
+  def convertOrthoAffricatesToTransCharacter(in:Array[String]):Array[String] = {
+    val out = new ArrayBuffer[String]
+    for (i <- 0 until in.length) {
+      val char = in(i)
+      //ts, tʃ, or dz
+      if (char == "z") {
+        out.append("T")
+      } else if (char == "ċ") {
+        out.append("C")
+      } else if (char == "ġ") {
+        out.append("J")
+      }  else {
+        out.append(char)
+      }
+    }
     out.toArray
   }
 
@@ -214,6 +246,33 @@ object BPUtils {
     out
   }
 
+  def loadSurveyData(filename: String) = {
+//    val pluralForms = Array.fill[ArrayBuffer[String]](nWords)(new ArrayBuffer[String])
+    val source = scala.io.Source.fromFile(filename)
+    val lines = source.getLines().toList
+    // First column is a "header"
+    // First line has the singulars across the row
+    val singulars = lines(0).split(",").slice(1,1000).map(_.trim)
+    val nWords = singulars.length
+    val pluralForms = Array.fill[ArrayBuffer[String]](nWords)(new ArrayBuffer[String])
+    // Subsequent rows have the plural responses
+    for (line <- lines.slice(1,lines.length)) {
+      val plurals = line.split(",").slice(1,1000)
+      println (line)
+      println("plurals.length = " + plurals.length)
+      assert (plurals.length == nWords)
+      for ((plural, wordIndex) <- plurals.zipWithIndex) {
+        if (plural.trim != "") {
+          pluralForms(wordIndex).append(plural.trim)
+        }
+      }
+    }
+    println (s"Check: word 1 SING: ${singulars(0)}\tPLURALS: ${pluralForms(0).mkString(",")}")
+
+    source.close()
+  }
+
+
   /**
    * Other helper methods
    */
@@ -247,6 +306,8 @@ object BPUtils {
     val s2 = "dʔsɛ"
 
     println("Weighted Dist: " + weightedLevenshtein(s1, s2, table))
+
+    loadSurveyData("/home/becky/Downloads/BrokenPluralsResponses052017.csv")
   }
 
 }

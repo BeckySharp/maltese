@@ -167,6 +167,8 @@ object BrokenPlurals {
       val sgOrth = data(0)
       val plOrth = data(1)
       val sgTrans = BPUtils.fixTrans(data(2))
+//      println (s"  Ortho($sgOrth)  Trans($sgTrans)")
+//      assert(sgOrth.length == sgTrans.length)
       val plTrans = BPUtils.fixTrans(data(3))
       val gender = data(4)
       val gloss = data(5)
@@ -179,6 +181,41 @@ object BrokenPlurals {
 
     println ("Finished loading, " + out.length + " pairs found.")
     out.toArray
+  }
+
+  // Loads the broken_plural.csv file from the online corpus resources
+  def makePhonemeMapFromCSV (filename:String):mutable.HashMap[String, String] = {
+    val out = new mutable.HashMap[String, String]()
+
+    // Load
+    println ("Loading data from " + filename)
+    val source = scala.io.Source.fromFile(filename, "UTF8")
+    val lines = source.getLines()
+
+
+    for (line <- lines.slice(1, 1000)) {
+      println (line)
+      val data = line.trim().split("\t")
+      assert (data.length == 8)
+
+      val sgOrth = data(0)
+      val plOrth = data(1)
+      val sgTrans = BPUtils.fixTrans(data(2))
+      val mySgTrans = BPUtils.fixTransForMap(data(2))
+      println (s"  Ortho($sgOrth)  Trans($mySgTrans)")
+      assert(sgOrth.length == mySgTrans.length)
+      val plTrans = BPUtils.fixTrans(data(3))
+      val gender = data(4)
+      val gloss = data(5)
+      val oldType = if (data(6) != "") data(6).toInt else -1
+      val cvTemplatepluralTrans = data(7)
+
+      //out.append(new LexicalItem(sgOrth, plOrth, sgTrans, plTrans, gender, gloss, oldType, cvTemplatepluralTrans))
+
+    }
+
+    println ("Finished loading, " + out.size + " pairs found.")
+    out
   }
 
   def makeGangs (in:Array[LexicalItem]):(Array[Gang], Lexicon[String], Counter[String]) = {
@@ -534,6 +571,7 @@ object BrokenPlurals {
   def main(args:Array[String]) {
     // Load the Singular-Plural pairs
     val lexicalItems = loadCSV("/home/becky/Downloads/broken_plural.csv")
+    val phonemeMap = makePhonemeMapFromCSV("/home/becky/Downloads/broken_plural.csv")
 
     // Load the Similarity table
     val similarityTableFile = "/home/becky/Documents/maltesePhonemeFeatures.stb"

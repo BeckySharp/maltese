@@ -13,3 +13,11 @@ class LexicalItem (val sgOrth:String, val plOrth:String, val sgTrans:String, val
   var cvTemplatePlOrth:String = ""
 
 }
+
+class SurveyItem (val sgOrth: String, val plOrths: Set[String]) {
+  var gang:Int = -1
+  var gangString:String = ""
+  var cvTemplateSgTrans:String = ""
+  var cvTemplateSgOrth:String = ""
+  var cvTemplatePlOrth:String = ""
+}
