@@ -15,3 +15,20 @@ class Gang (var gangString:String) {
   def size():Int = members.length
 
 }
+
+object Gang {
+  def mergeGangs(gangs: Seq[Gang]): Seq[Gang] = {
+    val groupedByGangString = gangs.groupBy(_.gangString)
+    val out = new ArrayBuffer[Gang]
+    for (group <- groupedByGangString) {
+      val gangString = group._1
+      val gangsWithGangString = group._2
+      val newGang = new Gang(gangString)
+      for (gang <- gangsWithGangString) {
+        gang.members.foreach(newGang.add)
+      }
+      out.append(newGang)
+    }
+    out
+  }
+}

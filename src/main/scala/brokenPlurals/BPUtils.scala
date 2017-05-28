@@ -214,6 +214,16 @@ object BPUtils {
     out
   }
 
+  /**
+   * Other helper methods
+   */
+
+  def addArrayInPlace(masterArray: Array[Double], toMerge:Array[Double]): Unit = {
+    assert (masterArray.length == toMerge.length)
+    for (i <- masterArray.indices) {
+      masterArray(i) += toMerge(i)
+    }
+  }
 
   /**
    * Debug Methods

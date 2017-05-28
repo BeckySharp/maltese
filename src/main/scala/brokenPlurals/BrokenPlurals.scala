@@ -18,13 +18,22 @@ import scala.util.Random
 
 object BrokenPlurals {
 
-  def doCrossValidationClassification(classifier:Classifier, classicFolds:Array[ClassicFold], table:HashMap[(String, String), Double],
-                                      k:Int = 0, testOn:String = "DEV", restricted:Boolean): (Array[Double], Double, Array[Double]) = {
+  def doCrossValidationClassification(classifier:Classifier,
+                                      classicFolds:Array[ClassicFold],
+                                      table:HashMap[(String, String), Double],
+                                      k:Int = 0,
+                                      testOn:String = "DEV",
+                                      restricted:Boolean,
+                                      gangLexicon: Lexicon[String]): (Array[Double], Double, Array[Double]) = {
     // Initialize
     val numFolds = classicFolds.length
     val foldAccuracies = new Array[Double](numFolds)
     val allResults = new ArrayBuffer[Double]
     val chancePerformances = new Array[Double](numFolds)
+    // For F1 stats
+    val truePositives = new Array[Double](gangLexicon.size)
+    val falseNegatives = new Array[Double](gangLexicon.size)
+    val falsePositives = new Array[Double](gangLexicon.size)
 
     // Set up the CV
     for (i <- 0 until numFolds) {
@@ -50,8 +59,11 @@ object BrokenPlurals {
         }
       }
 
+      val mergedTrainingGangs = Gang.mergeGangs(trainingGangs).toArray
+
       // Check the ceiling performance:
       val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, trainingGangs.toArray)
+      //val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, mergedTrainingGangs)
       chancePerformances(i) = chancePerformance
       println (s"** Fold $i Ceiling: $ceiling \t Chance Performance =  $chancePerformance")
 
@@ -60,10 +72,16 @@ object BrokenPlurals {
       val allItems = new ArrayBuffer[LexicalItem]
       allItems.insertAll(0,trainingItems)
       allItems.insertAll(allItems.length, testingItems)
+      //val classifications = classifier.classify(mergedTrainingGangs, allItems.toArray, table, k, trainingItems.length, restricted)
       val classifications = classifier.classify(trainingGangs.toArray, allItems.toArray, table, k, trainingItems.length, restricted)
 
       // Step 3: Evaluate
       val (accuracy, foldResults) = evaluate(testingItems.toArray, classifications)
+      val (foldTP, foldFP, foldFN) = evaluateByGang(testingItems.toArray, classifications, gangLexicon)
+      BPUtils.addArrayInPlace(truePositives, foldTP)
+      BPUtils.addArrayInPlace(falsePositives, foldFP)
+      BPUtils.addArrayInPlace(falseNegatives, foldFN)
+
 
       // Step 4: Store Accuracy
       foldAccuracies(testingFold) = accuracy
@@ -77,6 +95,19 @@ object BrokenPlurals {
     }
 
     println ("Final Chance performance: " + chancePerformances.sum)
+
+    // Display the final TP, FP, and FNs for each gang
+    println (s"Of ${gangLexicon.size} gangs, these were the TP, FP, and FN stats:")
+//    println ("GangTemplate\tTP\tFP\tFN")
+//    for (i <- 0 until gangLexicon.size) {
+//      println (s"${gangLexicon.get(i)}\t${truePositives(i)}\t${falsePositives(i)}\t${falseNegatives(i)}")
+//    }
+
+    displayClassF1(gangLexicon, truePositives, falsePositives, falseNegatives)
+    // Calculate the macro/micro F1
+    val microF1 = calcMicroF1(truePositives, falsePositives, falseNegatives)
+    val macroF1 = calcMacroF1(truePositives, falsePositives, falseNegatives)
+    println (s"The F1 scores are:\tmacro(averaged across all) = $macroF1  \tmicro(summed) = $microF1")
 
     // Return all fold accuracies and the average accuracy and all results
     val avgAcc:Double = foldAccuracies.sum.toDouble / numFolds.toDouble
@@ -354,6 +385,7 @@ object BrokenPlurals {
         nCorrect += questionAccuracy
         resultsByQuestion(iIdx) = questionAccuracy
       } else resultsByQuestion(iIdx) = 0
+
     }
 
     val accuracy = nCorrect / nItems.toDouble
@@ -361,6 +393,107 @@ object BrokenPlurals {
     println (s"\tFold Accuracy: $accuracy")
 
     (accuracy, resultsByQuestion)
+  }
+
+  // Returns both the accuracy for the fold (Double) as well as an array of indicators as to whether a given question was correct
+  // or not (for use with statistical post processing)
+  def evaluateByGang (items:Array[LexicalItem],
+                      classifications:Array[(String, Int)],
+                      gangLexicon: Lexicon[String]):(Array[Double], Array[Double], Array[Double]) = {
+
+    val truePositives = new Array[Double](gangLexicon.size)
+    val falseNegatives = new Array[Double](gangLexicon.size)
+    val falsePositives = new Array[Double](gangLexicon.size)
+
+    val nItems = items.length
+
+    for (iIdx <- 0 until nItems) {
+      val correct = items(iIdx).gangString
+      val correctGangIndex = gangLexicon.get(correct).get
+      val assignedGangIndex = gangLexicon.get(classifications(iIdx)._1).get
+
+      if (classifications(iIdx)._1 == correct) {
+        truePositives(assignedGangIndex) += 1.0
+      } else {
+        falsePositives(assignedGangIndex) += 1.0
+        falseNegatives(correctGangIndex) += 1.0
+      }
+    }
+
+//    println (s"Of ${gangLexicon.size} gangs, these were the TP, FP, and FN stats:")
+//    for (i <- 0 until gangLexicon.size) {
+//      println (s"  Gang ${gangLexicon.get(i)}: TP(${truePositives(i)}}) FP(${falsePositives(i)}}) FN(${falseNegatives(i)}})")
+//    }
+
+    (truePositives, falsePositives, falseNegatives)
+  }
+
+  def harmonicMean(a: Double, b:Double): Double = if (a + b == 0.0) 0.0 else (2.0 * a * b) / (a + b)
+
+  def displayClassF1 (gangLexicon: Lexicon[String], truePositives: Array[Double],
+                      falsePositives: Array[Double], falseNegatives: Array[Double]): Unit = {
+    println ("\n-------------------------------------------------")
+    println ("                F1 Scores by Gang")
+    println ("-------------------------------------------------")
+    println ("GangTemplate\tTruePos\tFalsePos\tFalseNeg\tPrecision\tRecall\tF1")
+    for (i <- 0 until gangLexicon.size) {
+      val (precision, recall, f1) = calcPRF1(truePositives(i), falsePositives(i), falseNegatives(i))
+      println (s"${gangLexicon.get(i)}\t${truePositives(i)}\t${falsePositives(i)}\t${falseNegatives(i)}\t$precision\t$recall\t$f1")
+    }
+    println ("-------------------------------------------------")
+
+  }
+
+  def calcPRF1(truePositives: Double, falsePositives: Double, falseNegatives: Double): (Double, Double, Double) = {
+    val precision = if (truePositives + falsePositives == 0) 0.0 else truePositives / (truePositives + falsePositives)
+    val recall = if (truePositives + falseNegatives == 0) 0.0 else truePositives / (truePositives + falseNegatives)
+    (precision, recall, harmonicMean(precision, recall))
+  }
+
+  def calcMacroF1(truePositives: Array[Double], falsePositives: Array[Double], falseNegatives: Array[Double]): Double = {
+    val nClasses = truePositives.length
+
+    // Find the precisions and recalls for each class
+    val precisions = new Array[Double](nClasses)
+    val recalls = new Array[Double](nClasses)
+    for (i <- 0 until nClasses) {
+      if (truePositives(i) + falsePositives(i) == 0.0) {
+        precisions(i) = 0.0
+      } else {
+        precisions(i) = truePositives(i) / (truePositives(i) + falsePositives(i))
+      }
+      if (truePositives(i) + falseNegatives(i) == 0.0) {
+        recalls(i) = 0.0
+      } else {
+        recalls(i) = truePositives(i) / (truePositives(i) + falseNegatives(i))
+      }
+    }
+    // Average them
+    val averagePrecision = precisions.sum / nClasses.toDouble
+    val averageRecall = recalls.sum / nClasses.toDouble
+
+    // Harmonic Mean
+    harmonicMean(averagePrecision, averageRecall)
+  }
+
+  def calcMicroF1(truePositives: Array[Double], falsePositives: Array[Double], falseNegatives: Array[Double]): Double = {
+    // Sum truePositives
+    val truePositiveSum = truePositives.sum
+
+    // Sum falsePositives
+    val falsePositiveSum = falsePositives.sum
+
+    // Sum falseNegatives
+    val falseNegativeSum = falseNegatives.sum
+
+    // Find the overall Precision
+    val precision = truePositiveSum / (truePositiveSum + falsePositiveSum)
+
+    // Find the overall Recall
+    val recall = truePositiveSum / (truePositiveSum + falseNegativeSum)
+
+    // Harmonic Mean
+    harmonicMean(precision, recall)
   }
 
   // Run stats using bootstrap resampling to determine the p-value
@@ -454,9 +587,22 @@ object BrokenPlurals {
     //val classifierMethod1 = kNearestNeighbors
     val classifierMethod1 = LogisticRegression
 //    val restricted1:Boolean = false
-    val restricted1:Boolean = false
+    val restricted1:Boolean = true
 
-    val (accuracies1, avgAcc1, results1) = doCrossValidationClassification(classifierMethod1, trialFolds(0), similarityTable, k = 5, testOn, restricted1)
+    println (s"There are ${gangLexicon.size} gangs!")
+    println (s"There are ${filteredLexicon.size} filtered gangs!")
+
+    //sys.exit(0)
+
+    val (accuracies1, avgAcc1, results1) = doCrossValidationClassification(
+      classifierMethod1,
+      trialFolds(0),
+      similarityTable,
+      k = 5,
+      testOn,
+      restricted1,
+      filteredLexicon
+    )
 
     // Display:
     println ("\n=================================================================================================================")
@@ -479,7 +625,15 @@ object BrokenPlurals {
     val classifierMethod2 = LogisticRegression
     val restricted2:Boolean = false
 
-    val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(classifierMethod2, trialFolds(0), similarityTable, k = 5, testOn, restricted2)
+    val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(
+      classifierMethod2,
+      trialFolds(0),
+      similarityTable,
+      k = 5,
+      testOn,
+      restricted2,
+      filteredLexicon
+    )
 
     // Display:
     println ("\n=================================================================================================================")
