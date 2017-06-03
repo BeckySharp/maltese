@@ -4,6 +4,8 @@ package brokenPlurals
 import edu.arizona.sista.learning._
 import edu.arizona.sista.struct.{Counter, Lexicon}
 
+import scala.collection.mutable
+
 //import scala.collection.mutable
 
 //import edu.arizona.sista.processors
@@ -14,42 +16,70 @@ import scala.collection.mutable.{ArrayBuffer, HashMap}
  * Created by becky on 11/29/15.
  */
 trait Classifier {
-  def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int, n:Int, restricted:Boolean):Array[(String, Int)]
+  /** Returns Array of (best_gang_string, num_gangs_tied_for_best) --> one for each item being classified **/
+  def classify
+    (gangs:Array[Gang],
+     items:Array[LexicalItem],
+     table: HashMap[(String, String), Double],    // The phoneme-phoneme similarity table
+     k:Int,                                       // for kNN
+     n:Int,                                       // cutoff for where training data ends and test data begins
+     restricted:Boolean
+    ):Array[(String, Int)]
+
+  /** Returns sorted Array of (gang_string, score) --> one for each item being classified **/
+  def rank
+  (
+    gangs:Array[Gang],
+    items:Array[LexicalItem],
+    table: HashMap[(String, String), Double],    // The phoneme-phoneme similarity table
+    k:Int,                                       // for kNN
+    n:Int,                                       // cutoff for where training data ends and test data begins
+    restricted:Boolean
+  ):Array[Array[(String, Double)]]
+
 
   def mkString ():String
+
+  def mkTrainTestSplit(items: Array[LexicalItem], n: Int): (Array[LexicalItem], Array[LexicalItem]) = {
+    (items.slice(0,n), items.slice(n, items.length))
+  }
 }
 
 
 object DHPH2014_GCM extends Classifier {
 
+  def itemSimilarityToGangs(item: LexicalItem, gangs: Seq[Gang], table: HashMap[(String, String), Double]): Array[Double] = {
+    val similarityToGangs = Array.fill[Double](gangs.length)(0.0)
+    var allSimilarities:Double = 0.0
+
+    // Find the similarity to each gang
+    for (i <- 0 until gangs.length) {
+      val gang = gangs(i)
+
+      // Find and store the similarity to the gang member
+      for (member <- gang.members) {
+        val simToMember = BPUtils.dhSimilarity(item, member, table)
+        similarityToGangs(i) += simToMember
+        allSimilarities += simToMember
+      }
+    }
+    // Store the similarities to all the gangs for this item
+    //    These are the S_{i,C_j} values for each j in K (K is the set of all gangs) from DH-PH 2014
+    val finalSimilarities = similarityToGangs.map(x => x / allSimilarities)
+
+    finalSimilarities
+  }
+
   def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int = 0, n:Int, restricted:Boolean):Array[(String, Int)] = {
     // Here - n is the cutoff saying where training data ends and testing data begins
-    val trainingItems = items.slice(0,n)
-    val testingItems = items.slice(n, items.length)
+    val (trainingItems, testingItems) = mkTrainTestSplit(items, n)
 
     val classifications = new Array[(String,Int)](testingItems.length)
 
     for (iIdx <- 0 until testingItems.length){
 
       val item = testingItems(iIdx)
-
-      val similarityToGangs = Array.fill[Double](gangs.length)(0.0)
-      var allSimilarities:Double = 0.0
-
-      // Find the similarity to each gang
-      for (i <- 0 until gangs.length) {
-        val gang = gangs(i)
-
-        // Find and store the similarity to the gang member
-        for (member <- gang.members) {
-          val simToMember = BPUtils.dhSimilarity(item, member, table)
-          similarityToGangs(i) += simToMember
-          allSimilarities += simToMember
-        }
-      }
-      // Store the similarities to all the gangs for this item
-      //    These are the S_{i,C_j} values for each j in K (K is the set of all gangs) from DH-PH 2014
-      val finalSimilarities = similarityToGangs.map(x => x / allSimilarities)
+      val finalSimilarities = itemSimilarityToGangs(item, gangs, table)
 
       // Find the best gang, handling ties
       var maxSim:Double = Double.MinValue
@@ -71,15 +101,83 @@ object DHPH2014_GCM extends Classifier {
     classifications
   }
 
+  def rank (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double],
+            k:Int = 0, n:Int, restricted:Boolean):Array[Array[(String, Double)]] = {
+    // Here - n is the cutoff saying where training data ends and testing data begins
+    val (_, testingItems) = mkTrainTestSplit(items, n)
+
+    val rankedGangsPerItem = for {
+      (item, iIdx) <- testingItems.zipWithIndex
+      gangSimilarities = itemSimilarityToGangs(item, gangs, table)
+      gangSimilaritiesNamed = for {
+        (gangSimilarity, gangIndex) <- gangSimilarities.zipWithIndex
+        currGangString = gangs(gangIndex).gangString
+      } yield (currGangString, gangSimilarity)
+      sortedGangsForItem = gangSimilaritiesNamed.sortBy(- _._2)
+    } yield sortedGangsForItem
+
+    rankedGangsPerItem
+  }
+
   def mkString():String = "Dawdy-Hesterberg & Pierrehumbert (2014) -- GCM"
 }
 
 object DHPH2014_restrictedGCM extends Classifier {
 
-  def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int = 0, n:Int, restricted:Boolean):Array[(String, Int)] = {
+  def rank (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double],
+            k:Int = 0, n:Int, restricted:Boolean):Array[Array[(String, Double)]] = {
     // Here - n is the cutoff saying where training data ends and testing data begins
-    val trainingItems = items.slice(0,n)
-    val testingItems = items.slice(n, items.length)
+    val (_, testingItems) = mkTrainTestSplit(items, n)
+
+    val rankedGangsPerItem = for {
+      (item, iIdx) <- testingItems.zipWithIndex
+      (gangSimilarities, _) = itemSimilarityToGangs(item, gangs, table)
+      gangSimilaritiesNamed = for {
+        (gangSimilarity, gangIndex) <- gangSimilarities.zipWithIndex
+        currGangString = gangs(gangIndex).gangString
+      } yield (currGangString, gangSimilarity)
+    // Only keep the ones that are not 0.0 (i.e. that match the singular template)
+      sortedGangsForItem = gangSimilaritiesNamed.filter(_._2 != 0.0).sortBy(- _._2)
+    } yield sortedGangsForItem
+
+    rankedGangsPerItem
+  }
+
+  def itemSimilarityToGangs(item: LexicalItem, gangs: Seq[Gang], table: HashMap[(String, String), Double]): (Array[Double], Int) = {
+    // Initialize variables for the fold
+    var numCandGangs:Int = 0                      // Keeps Track of the eligible gangs for this item
+    val similarityToGangs = Array.fill[Double](gangs.length)(0.0)
+    var allSimilarities:Double = 0.0
+
+    // Find the similarity to each gang
+    for (i <- 0 until gangs.length) {
+      val gang = gangs(i)
+
+      // Find the singular for to restrict the candidate gangs
+      val singularForm = gang.getSingular()
+
+      // If the singular form of the gang matches the singular form of the item, add the similarities
+      if (singularForm == item.cvTemplateSgTrans) {
+        // Increment the candidate gangs counter
+        numCandGangs += 1
+
+        // Find and store the similarity to the gang member
+        for (member <- gang.members) {
+          val simToMember = BPUtils.dhSimilarity(item, member, table)
+          similarityToGangs(i) += simToMember
+          allSimilarities += simToMember
+        }
+      }
+    }
+    // Store the similarities to all the gangs for this item
+    //    These are the S_{i,C_j} values for each j in K (K is the set of all gangs) from DH-PH 2014
+    val finalSimilarities = similarityToGangs.map(x => x / allSimilarities)
+    (finalSimilarities, numCandGangs)
+  }
+
+    def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int = 0, n:Int, restricted:Boolean):Array[(String, Int)] = {
+    // Here - n is the cutoff saying where training data ends and testing data begins
+    val (trainingItems, testingItems) = mkTrainTestSplit(items, n)
 
     val classifications = new Array[(String,Int)](testingItems.length)
     val numItems = testingItems.length
@@ -92,35 +190,7 @@ object DHPH2014_restrictedGCM extends Classifier {
     for (iIdx <- 0 until numItems){
 
       val item = testingItems(iIdx)
-
-      // Initialize variables for the fold
-      var numCandGangs:Int = 0                      // Keeps Track of the eligible gangs for this item
-      val similarityToGangs = Array.fill[Double](gangs.length)(0.0)
-      var allSimilarities:Double = 0.0
-
-      // Find the similarity to each gang
-      for (i <- 0 until gangs.length) {
-        val gang = gangs(i)
-
-        // Find the singular for to restrict the candidate gangs
-        val singularForm = gang.getSingular()
-
-        // If the singular form of the gang matches the singular form of the item, add the similarities
-        if (singularForm == item.cvTemplateSgTrans) {
-          // Increment the candidate gangs counter
-          numCandGangs += 1
-
-          // Find and store the similarity to the gang member
-          for (member <- gang.members) {
-            val simToMember = BPUtils.dhSimilarity(item, member, table)
-            similarityToGangs(i) += simToMember
-            allSimilarities += simToMember
-          }
-        }
-      }
-      // Store the similarities to all the gangs for this item
-      //    These are the S_{i,C_j} values for each j in K (K is the set of all gangs) from DH-PH 2014
-      val finalSimilarities = similarityToGangs.map(x => x / allSimilarities)
+      val (finalSimilarities, numCandGangs) = itemSimilarityToGangs(item, gangs, table)
 
       // Find the best gang, handling ties
       var maxSim:Double = Double.MinValue
@@ -155,10 +225,13 @@ object DHPH2014_restrictedGCM extends Classifier {
 }
 
 object kNearestNeighbors extends Classifier {
+
+  def rank(gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double],
+           k:Int = 0, n:Int, restricted:Boolean):Array[Array[(String, Double)]] = ???
+
   def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int, n:Int, restricted:Boolean):Array[(String, Int)] = {
     // Here - n is the cutoff saying where training data ends and testing data begins
-    val trainingItems = items.slice(0,n)
-    val testingItems = items.slice(n, items.length)
+    val (trainingItems, testingItems) = mkTrainTestSplit(items, n)
 
     val classifications = new Array[(String,Int)](testingItems.length)
 
@@ -250,10 +323,14 @@ object LogisticRegression extends Classifier {
   val SIZE_EXTENSION = "_size"
   val DHSIM_EXTENSION = "_newMinSim"
 
-  def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int, n:Int, restricted:Boolean):Array[(String, Int)] = {
-    // Here - n is the cutoff saying where training data ends and testing data begins
-    val trainingItems = items.slice(0,n)
-    val testingItems = items.slice(n, items.length)
+  // Used for splitting the items to Train, Test, and Rank split
+  def getRankingSplit(items: Array[LexicalItem], n1: Int, n2: Int): (Array[LexicalItem], Array[LexicalItem], Array[LexicalItem]) = {
+    (items.slice(0,n1), items.slice(n1, n2), items.slice(n2, items.length))
+  }
+
+  def rank (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double],
+    k:Int = 0, n:Int, restricted:Boolean):Array[Array[(String, Double)]] = {
+    val (trainingItems, testingItems) = mkTrainTestSplit(items, n)
 
     // Make a master feature lexicon
     val featureLexicon = new Lexicon[String]
@@ -263,17 +340,48 @@ object LogisticRegression extends Classifier {
       featureLexicon.add("g" + gangIndex + AVG_EXTENSION)
       featureLexicon.add("g" + gangIndex + SIZE_EXTENSION)
       featureLexicon.add("g" + gangIndex + DHSIM_EXTENSION)
-
     }
 
     // Make an RVFDataset for the training items
     val trainingDataset = makeDataset(trainingItems, gangs, featureLexicon, table, restricted)
     val scaleRange = Datasets.svmScaleRVFDataset(trainingDataset, 0.0, 1.0)
 
+    // Initialize the Logistic Regression Classifier
+    val classifier = new LogisticRegressionClassifier[String, Int](C = 1.0, bias = true)
+
+    // Train
+    classifier.train(trainingDataset)
+
+    // Rank
+    val rankedGangsPerItem = for {
+      (testItem, i) <- testingItems.zipWithIndex
+      datum = makeDatum(testItem, gangs, featureLexicon, table, restricted, rescale = true, scaleRange)
+      distribution = classifier.scoresOf(datum).toSeq.sortBy(-_._2)
+    } yield distribution.toArray
+
+    rankedGangsPerItem
+  }
+
+  def classify (gangs:Array[Gang], items:Array[LexicalItem], table: HashMap[(String, String), Double], k:Int, n:Int, restricted:Boolean):Array[(String, Int)] = {
+    // Here - n is the cutoff saying where training data ends and testing data begins
+    val (trainingItems, testingItems) = mkTrainTestSplit(items, n)
+
+    // Make a master feature lexicon
+    val featureLexicon = new Lexicon[String]
+    for (gangIndex <- 0 until gangs.length) {
+      featureLexicon.add("g" + gangIndex + MIN_EXTENSION)
+      featureLexicon.add("g" + gangIndex + MAX_EXTENSION)
+      featureLexicon.add("g" + gangIndex + AVG_EXTENSION)
+      featureLexicon.add("g" + gangIndex + SIZE_EXTENSION)
+      featureLexicon.add("g" + gangIndex + DHSIM_EXTENSION)
+    }
+
+    // Make an RVFDataset for the training items
+    val trainingDataset = makeDataset(trainingItems, gangs, featureLexicon, table, restricted)
+    val scaleRange = Datasets.svmScaleRVFDataset(trainingDataset, 0.0, 1.0)
 
     // Initialize the Logistic Regression Classifier
     val classifier = new LogisticRegressionClassifier[String, Int](C = 1.0, bias = true)
-    //val classifier = new Naive
 
     // Train
     classifier.train(trainingDataset)
@@ -288,7 +396,6 @@ object LogisticRegression extends Classifier {
 //      for (index <- classCounter.keySet){
 //        val featureName = featureLexicon.get(index)
 //        println (s"f$index: $featureName -- ${classCounter.getCount(index)}")
-//
 //      }
 //    }
 

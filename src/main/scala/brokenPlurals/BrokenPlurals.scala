@@ -90,18 +90,18 @@ object BrokenPlurals {
       allResults.insertAll(allResults.length, foldResults)
 
       //      println ("tr: " + trainingFolds.mkString(""))
-//      println ("testing on: " + testingFold)
-//      println ("leftout: " + leftOutFold)
+      //      println ("testing on: " + testingFold)
+      //      println ("leftout: " + leftOutFold)
     }
 
     println ("Final Chance performance: " + chancePerformances.sum)
 
     // Display the final TP, FP, and FNs for each gang
     println (s"Of ${gangLexicon.size} gangs, these were the TP, FP, and FN stats:")
-//    println ("GangTemplate\tTP\tFP\tFN")
-//    for (i <- 0 until gangLexicon.size) {
-//      println (s"${gangLexicon.get(i)}\t${truePositives(i)}\t${falsePositives(i)}\t${falseNegatives(i)}")
-//    }
+    //    println ("GangTemplate\tTP\tFP\tFN")
+    //    for (i <- 0 until gangLexicon.size) {
+    //      println (s"${gangLexicon.get(i)}\t${truePositives(i)}\t${falsePositives(i)}\t${falseNegatives(i)}")
+    //    }
 
     displayClassF1(gangLexicon, truePositives, falsePositives, falseNegatives)
     // Calculate the macro/micro F1
@@ -112,6 +112,81 @@ object BrokenPlurals {
     // Return all fold accuracies and the average accuracy and all results
     val avgAcc:Double = foldAccuracies.sum.toDouble / numFolds.toDouble
     (foldAccuracies, avgAcc, allResults.toArray)
+  }
+
+  def doCrossValidationSurveyRanking(classifier:Classifier,
+                                      classicFolds:Array[ClassicFold],
+                                      table:HashMap[(String, String), Double],
+                                      k:Int = 0,
+                                      testOn:String = "DEV",
+                                      restricted:Boolean,
+                                      gangLexicon: Lexicon[String],
+                                      surveyItems: Seq[SurveyItem],
+                                      surveyLexicalItems: Seq[LexicalItem]): (Array[Double], Double, Array[Double]) = {
+    // Initialize
+    val numFolds = classicFolds.length
+    val foldNDCGs = new Array[Double](numFolds)
+    val ndgsForStats = new ArrayBuffer[Double]
+    val chancePerformances = new Array[Double](numFolds)
+
+    // Set up the CV
+    for (i <- 0 until numFolds) {
+      // For each fold:
+      // Step 1: Determine the trainingGangs and the test items (dev or test)
+      // 1a: Determine testing fold and left-out fold
+      val testingFold = i
+      var leftOutFold = if (testOn == "DEV") i + 1 else i - 1
+      if (leftOutFold >= numFolds) leftOutFold = 0
+      else if (leftOutFold <= 0) leftOutFold = numFolds - 1
+      // 1b: Retrieve testing data
+      val testingItems = classicFolds(i).foldData
+
+      // 1c: Retrieve Training Gangs
+      val trainingGangs = new ArrayBuffer[Gang]
+      val trainingItems = new ArrayBuffer[LexicalItem]
+      //val trainingFolds = new ArrayBuffer[Int]
+      for (j <- 0 until numFolds) {
+        //if (j != testingFold && j != leftOutFold) trainingFolds.append(j)
+        if (j != testingFold && j != leftOutFold) {
+          trainingGangs.insertAll(trainingGangs.length, classicFolds(j).foldGangs)
+          trainingItems.insertAll(trainingItems.length, classicFolds(j).foldData)
+        }
+      }
+
+      val mergedTrainingGangs = Gang.mergeGangs(trainingGangs).toArray
+
+      // Check the ceiling performance:
+//      val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, trainingGangs.toArray)
+      val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, mergedTrainingGangs)
+      chancePerformances(i) = chancePerformance
+      println (s"** Fold $i Ceiling: $ceiling \t Chance Performance =  $chancePerformance")
+
+
+      // Step 2: Rank
+      val allItems = new ArrayBuffer[LexicalItem]
+      allItems.insertAll(0,trainingItems)
+      allItems.insertAll(allItems.length, surveyLexicalItems)   // Use the lexical items instead of the true test items
+      val rankings: Array[Array[(String, Double)]] = classifier.rank(
+          mergedTrainingGangs, //trainingGangs.toArray,
+          allItems.toArray,
+          table,
+          k,
+          trainingItems.length,
+          restricted)
+
+      println (s"Of ${}")
+
+      // Step 3: Evaluate
+      val (ndcg, instanceNDGs) = EvaluationUtils.evaluateRankingNDCG(surveyItems.toArray, rankings)
+
+      // Step 4: Store NDCG and the instance NDGs
+      foldNDCGs(testingFold) = ndcg
+      ndgsForStats.appendAll(instanceNDGs)
+    }
+
+    val averageNDCG = foldNDCGs.sum / foldNDCGs.length.toDouble
+
+    (foldNDCGs, averageNDCG, ndgsForStats.toArray)
   }
 
   def checkCeiling (items:Array[LexicalItem], gangs:Array[Gang]):(Double, Double) = {
@@ -183,39 +258,39 @@ object BrokenPlurals {
     out.toArray
   }
 
-  // Loads the broken_plural.csv file from the online corpus resources
-  def makePhonemeMapFromCSV (filename:String):mutable.HashMap[String, String] = {
-    val out = new mutable.HashMap[String, String]()
 
+  // Loads the BrokenPluralsResponses052017_trans.csv file from the survey responses
+  def loadSurveyDataCSV (filename:String, vowels: Array[String]):Array[SurveyItem] = {
     // Load
     println ("Loading data from " + filename)
     val source = scala.io.Source.fromFile(filename, "UTF8")
-    val lines = source.getLines()
-
+    val lines = source.getLines().toArray
+    val surveyWords = lines.head.split(",").slice(1,1000).map(singular => BPUtils.fixTrans(singular))
+    val numSurveyWords = surveyWords.length
+    // Make a buffer to hold the plural trans forms for each of the survey words
+    val pluralForms = Array.fill[ArrayBuffer[String]](numSurveyWords)(new ArrayBuffer[String])
 
     for (line <- lines.slice(1, 1000)) {
       println (line)
-      val data = line.trim().split("\t")
-      assert (data.length == 8)
-
-      val sgOrth = data(0)
-      val plOrth = data(1)
-      val sgTrans = BPUtils.fixTrans(data(2))
-      val mySgTrans = BPUtils.fixTransForMap(data(2))
-      println (s"  Ortho($sgOrth)  Trans($mySgTrans)")
-      assert(sgOrth.length == mySgTrans.length)
-      val plTrans = BPUtils.fixTrans(data(3))
-      val gender = data(4)
-      val gloss = data(5)
-      val oldType = if (data(6) != "") data(6).toInt else -1
-      val cvTemplatepluralTrans = data(7)
-
-      //out.append(new LexicalItem(sgOrth, plOrth, sgTrans, plTrans, gender, gloss, oldType, cvTemplatepluralTrans))
-
+      val data = line.trim().split(",").slice(1,1000)
+      // Iterate through the row, if any of the items are there (like, non-empty) add them
+      // to the appropriate survey item list of plurals
+      for ((cellContents, wordIdx) <- data.zipWithIndex) {
+        if (cellContents != "") {
+          val plTrans = BPUtils.fixTrans(cellContents)
+          pluralForms(wordIdx).append(plTrans)
+        }
+      }
     }
 
-    println ("Finished loading, " + out.size + " pairs found.")
-    out
+    println ("Finished loading, " + numSurveyWords + " survey items found.")
+    surveyWords.zipWithIndex.map(wordAndIndex =>
+      new SurveyItem(
+        wordAndIndex._1,
+        pluralForms(wordAndIndex._2).toSet,
+        vowels
+      )
+    )
   }
 
   def makeGangs (in:Array[LexicalItem]):(Array[Gang], Lexicon[String], Counter[String]) = {
@@ -571,7 +646,6 @@ object BrokenPlurals {
   def main(args:Array[String]) {
     // Load the Singular-Plural pairs
     val lexicalItems = loadCSV("/home/becky/Downloads/broken_plural.csv")
-    val phonemeMap = makePhonemeMapFromCSV("/home/becky/Downloads/broken_plural.csv")
 
     // Load the Similarity table
     val similarityTableFile = "/home/becky/Documents/maltesePhonemeFeatures.stb"
@@ -620,10 +694,10 @@ object BrokenPlurals {
     //  Classification Method 1
     // ----------------------------------------------------------------------------------------------------
 
-    //val classifierMethod1 = DHPH2014_GCM
+    val classifierMethod1 = DHPH2014_GCM
     //val classifierMethod1 = DHPH2014_restrictedGCM
     //val classifierMethod1 = kNearestNeighbors
-    val classifierMethod1 = LogisticRegression
+    //val classifierMethod1 = LogisticRegression
 //    val restricted1:Boolean = false
     val restricted1:Boolean = true
 
@@ -657,11 +731,11 @@ object BrokenPlurals {
     // ----------------------------------------------------------------------------------------------------
 
     sys.exit(1)
-    //val classifierMethod2 = DHPH2014_GCM
+    val classifierMethod2 = DHPH2014_GCM
     //val classifierMethod2 = DHPH2014_restrictedGCM
     //val classifierMethod2 = kNearestNeighbors
-    val classifierMethod2 = LogisticRegression
-    val restricted2:Boolean = false
+    //val classifierMethod2 = LogisticRegression
+    val restricted2:Boolean = true
 
     val (accuracies2, avgAcc2, results2) = doCrossValidationClassification(
       classifierMethod2,

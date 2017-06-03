@@ -29,7 +29,7 @@ object BPUtils {
       val b = decode(str2(j - 1).toString)
       val cost: Double = if (a == b) 0 else table.getOrElse((a,b), table.getOrElse((b,a), -1.0))
 
-      if (cost == -1.0) throw new RuntimeException(s"Error: failed to find ($a,$b) in table")
+      if (cost == -1.0) throw new RuntimeException(s"Error: failed to find ($a,$b) in table:\n${table}")
 
       d(i)(j) = min(
         d(i - 1)(j) + 1, // deletion
@@ -99,7 +99,7 @@ object BPUtils {
   def fixLongVowels(in:Array[String]):Array[String] = {
     val out = new ArrayBuffer[String]
     for (i <- 0 until in.length) {
-      if (in(i) == "ː") out.append (in(i - 1))
+      if (in(i) == "ː" || in(i) == ":") out.append (in(i - 1))
       else out.append(in(i))
     }
     out.toArray
