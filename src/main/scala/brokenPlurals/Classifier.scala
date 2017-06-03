@@ -128,19 +128,20 @@ object DHPH2014_restrictedGCM extends Classifier {
             k:Int = 0, n:Int, restricted:Boolean):Array[Array[(String, Double)]] = {
     // Here - n is the cutoff saying where training data ends and testing data begins
     val (_, testingItems) = mkTrainTestSplit(items, n)
+    val rankedGangsForItems = new ArrayBuffer[Array[(String, Double)]]
 
-    val rankedGangsPerItem = for {
-      (item, iIdx) <- testingItems.zipWithIndex
-      (gangSimilarities, _) = itemSimilarityToGangs(item, gangs, table)
-      gangSimilaritiesNamed = for {
-        (gangSimilarity, gangIndex) <- gangSimilarities.zipWithIndex
-        currGangString = gangs(gangIndex).gangString
-      } yield (currGangString, gangSimilarity)
-    // Only keep the ones that are not 0.0 (i.e. that match the singular template)
-      sortedGangsForItem = gangSimilaritiesNamed.filter(_._2 != 0.0).sortBy(- _._2)
-    } yield sortedGangsForItem
+    for (i <- testingItems.indices) {
+      val item = testingItems(i)
+      val (gangSimilarities, _) = itemSimilarityToGangs(item, gangs, table)
+      val filtered = gangSimilarities
+        .zipWithIndex
+        .filter(simIndIndex => gangs(simIndIndex._2).getSingular() == item.cvTemplateSgTrans)
+      val named = filtered.map(scoreAndIndex => (gangs(scoreAndIndex._2).gangString, scoreAndIndex._1))
+      rankedGangsForItems.append(named)
+    }
 
-    rankedGangsPerItem
+    println(s"!!! of ${gangs.length} gangs, ${rankedGangsForItems.map(_.length).mkString(", ")} were kept after filter.")
+    rankedGangsForItems.toArray
   }
 
   def itemSimilarityToGangs(item: LexicalItem, gangs: Seq[Gang], table: HashMap[(String, String), Double]): (Array[Double], Int) = {
@@ -155,9 +156,11 @@ object DHPH2014_restrictedGCM extends Classifier {
 
       // Find the singular for to restrict the candidate gangs
       val singularForm = gang.getSingular()
-
+//      println ("Singularform: " + singularForm)
+//      println ("cvTemplateSgTrans: " + item.cvTemplateSgTrans)
       // If the singular form of the gang matches the singular form of the item, add the similarities
       if (singularForm == item.cvTemplateSgTrans) {
+
         // Increment the candidate gangs counter
         numCandGangs += 1
 
@@ -172,6 +175,8 @@ object DHPH2014_restrictedGCM extends Classifier {
     // Store the similarities to all the gangs for this item
     //    These are the S_{i,C_j} values for each j in K (K is the set of all gangs) from DH-PH 2014
     val finalSimilarities = similarityToGangs.map(x => x / allSimilarities)
+
+    //println(s"For this item: $numCandGangs cand Gangs")
     (finalSimilarities, numCandGangs)
   }
 
@@ -356,8 +361,15 @@ object LogisticRegression extends Classifier {
     val rankedGangsPerItem = for {
       (testItem, i) <- testingItems.zipWithIndex
       datum = makeDatum(testItem, gangs, featureLexicon, table, restricted, rescale = true, scaleRange)
-      distribution = classifier.scoresOf(datum).toSeq.sortBy(-_._2)
+      distribution = classifier
+        .scoresOf(datum)
+        .toSeq
+        .filter(gs => !restricted || Gang.getSingular(gs._1) == testItem.cvTemplateSgTrans)
+        .sortBy(-_._2)
     } yield distribution.toArray
+
+
+    println(s"!!! of ${gangs.length} gangs, ${rankedGangsPerItem.map(_.length).mkString(", ")} were kept after filter.")
 
     rankedGangsPerItem
   }
@@ -410,6 +422,10 @@ object LogisticRegression extends Classifier {
       val datum = makeDatum (testItem, gangs, featureLexicon, table, restricted, rescale = true, scaleRange)
 
       val predictedLabel = classifier.classOf(datum)
+      if (restricted && predictedLabel.split("-")(0).split("").slice(2,1000).mkString("") != testItem.cvTemplateSgTrans) {
+        println("PROBLEM!!!!")
+        sys.exit(0)
+      }
       val distribution = classifier.scoresOf(datum)
       val confidence = distribution.getCount(predictedLabel)
 

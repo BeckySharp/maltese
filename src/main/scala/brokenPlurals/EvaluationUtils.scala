@@ -75,6 +75,8 @@ object EvaluationUtils {
 //    sys.exit(0)
     // ---------------------
     val numGolds = surveyItems.map(_.gangStrings.size)
+    println(s"!!! num items in ranking: ${rankings.map(_.length).mkString(", ")} were kept after filter.")
+
     val surveyItemGains = calculateGains(surveyItems, rankings)
     val indexedInstances = surveyItemGains.zipWithIndex
     val ndgsForStats = indexedInstances.map(

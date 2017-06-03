@@ -17,6 +17,9 @@ class Gang (var gangString:String) {
 }
 
 object Gang {
+
+  def getSingular(gangString: String): String = gangString.split("-")(0).split("").slice(2,1000).mkString("")
+
   def mergeGangs(gangs: Seq[Gang]): Seq[Gang] = {
     val groupedByGangString = gangs.groupBy(_.gangString)
     val out = new ArrayBuffer[Gang]

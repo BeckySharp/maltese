@@ -32,6 +32,9 @@ object ProcessSurveyData {
 
     // Make temp LexicalItems from the SurveyItems
     val surveyLexicalItems = surveyItems.map(_.toLexicalItem)
+    // Generate CVTemplates for the singular forms
+    BPUtils.generateSingularTemplates(surveyLexicalItems, vowelSet)
+
 
     // split the data into folds
     val numFolds:Int = 5
@@ -45,10 +48,10 @@ object ProcessSurveyData {
     //  Classification Method 1
     // ----------------------------------------------------------------------------------------------------
 
-    val classifierMethod1 = DHPH2014_GCM
+    //val classifierMethod1 = DHPH2014_GCM
     //val classifierMethod1 = DHPH2014_restrictedGCM
     //val classifierMethod1 = kNearestNeighbors
-    //val classifierMethod1 = LogisticRegression
+    val classifierMethod1 = LogisticRegression
     //    val restricted1:Boolean = false
     val restricted1:Boolean = true
 
@@ -79,6 +82,57 @@ object ProcessSurveyData {
     println ("")
     println ("Final (Averaged) NDCG: " + avgNDCG1)
 
+    // ----------------------------------------------------------------------------------------------------
+    //  Classification Method 2
+    // ----------------------------------------------------------------------------------------------------
+
+    //val classifierMethod2 = DHPH2014_GCM
+    val classifierMethod2 = DHPH2014_restrictedGCM
+    //val classifierMethod2 = kNearestNeighbors
+    //val classifierMethod2 = LogisticRegression
+    //    val restricted1:Boolean = false
+    val restricted2:Boolean = false
+
+    //sys.exit(0)
+
+    val (ndcgsForAllFolds2, avgNDCG2, instanceNDCGsForStats2) = BrokenPlurals.doCrossValidationSurveyRanking(
+      classifierMethod2,
+      trialFolds(0),
+      similarityTable,
+      k = 5,
+      testOn,
+      restricted1,
+      filteredLexicon,
+      surveyItems,
+      surveyLexicalItems
+    )
+
+    // Display:
+    println ("\n=================================================================================================================")
+    println (s"\tclassifier 2: ${classifierMethod2.mkString()}\n\tnumFolds: $numFolds")
+    println ("=================================================================================================================")
+    println ("                                        Final Results - testing on: " + testOn)
+    println ("=================================================================================================================\n")
+    println ("NDCGs across all folds: " + ndcgsForAllFolds2.mkString("\t"))
+    println ("")
+    println ("Final (Averaged) NDCG: " + avgNDCG2)
+
+    // Statistical Analysis
+    val nSamples = 10000
+    // the first should be the baseline
+    val pValue = BrokenPlurals.runStats(instanceNDCGsForStats2, instanceNDCGsForStats1, nSamples, randomSeed = 6)
+    // Display:
+    println ("\n\n=================================================================================================================")
+    println (s"\tp-value: $pValue \t (using $nSamples samples)")
+    println ("=================================================================================================================")
+
+
+
   }
+
+  // todo: merge with accuracies
+  // todo: spit out top k rankings per item
+  // todo: precision@1 for surveyItems from diff methods
+  // todo: redo stats for accuracies
 
 }

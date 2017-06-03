@@ -179,12 +179,14 @@ object BPUtils {
       //println ("SgTrans: " + li.sgTrans + "\tCVTemp: " + li.cvTemplateSgTrans)
 
       // Checking for inconsistencies
-      val tempCVPlural = makeCVTemplate(li.plTrans, vowels)
-      if (tempCVPlural != li.cvTemplatePlTrans) {
-        println ("plTrans: " + li.plTrans)
-        println ("Provided Plural Template: " + li.cvTemplatePlTrans)
-        println ("  Generated: " + tempCVPlural)
-        sys.exit(1)
+      if (li.plTrans != "") {
+        val tempCVPlural = makeCVTemplate(li.plTrans, vowels)
+        if (tempCVPlural != li.cvTemplatePlTrans) {
+          println ("plTrans: " + li.plTrans)
+          println ("Provided Plural Template: " + li.cvTemplatePlTrans)
+          println ("  Generated: " + tempCVPlural)
+          sys.exit(1)
+        }
       }
     }
   }

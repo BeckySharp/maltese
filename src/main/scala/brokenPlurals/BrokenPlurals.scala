@@ -157,9 +157,9 @@ object BrokenPlurals {
 
       // Check the ceiling performance:
 //      val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, trainingGangs.toArray)
-      val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, mergedTrainingGangs)
-      chancePerformances(i) = chancePerformance
-      println (s"** Fold $i Ceiling: $ceiling \t Chance Performance =  $chancePerformance")
+//      val (ceiling, chancePerformance) = checkCeiling(testingItems.toArray, mergedTrainingGangs)
+//      chancePerformances(i) = chancePerformance
+//      println (s"** Fold $i Ceiling: $ceiling \t Chance Performance =  $chancePerformance")
 
 
       // Step 2: Rank
@@ -174,7 +174,8 @@ object BrokenPlurals {
           trainingItems.length,
           restricted)
 
-      println (s"Of ${}")
+//      println (s"---Training gangs:${trainingGangs.length}")
+//      println (s"---Merged gangs:${mergedTrainingGangs.length}")
 
       // Step 3: Evaluate
       val (ndcg, instanceNDGs) = EvaluationUtils.evaluateRankingNDCG(surveyItems.toArray, rankings)
@@ -624,9 +625,9 @@ object BrokenPlurals {
       // Generate a sample from both inputs
       for (j <- 0 until nItems) {
         val aIndex = randA.nextInt(nItems)
-        val bIndex = randB.nextInt(nItems)
+        //val bIndex = randB.nextInt(nItems)
         aSample += a(aIndex)
-        bSample += b(bIndex)
+        bSample += b(aIndex)
       }
 
       // Determine which is higher
@@ -694,10 +695,10 @@ object BrokenPlurals {
     //  Classification Method 1
     // ----------------------------------------------------------------------------------------------------
 
-    val classifierMethod1 = DHPH2014_GCM
+    //val classifierMethod1 = DHPH2014_GCM
     //val classifierMethod1 = DHPH2014_restrictedGCM
     //val classifierMethod1 = kNearestNeighbors
-    //val classifierMethod1 = LogisticRegression
+    val classifierMethod1 = LogisticRegression
 //    val restricted1:Boolean = false
     val restricted1:Boolean = true
 
